@@ -83,6 +83,25 @@ public final class LiteVersions {
     if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
   }
 
+  /** Conservative runtime guard until the new renderer is validated on Android. */
+  public static String compatibilityReason(String version) {
+    id(version);
+    if (version.equals("26") || version.startsWith("26.") || version.startsWith("26-"))
+      return "当前 Android 图形运行层暂不支持 Minecraft 26.x。已确认 Mali-G615 上 RenderPearl 的 OpenGL 初始化失败，Vulkan 又缺少必要扩展；为避免启动崩溃，已禁止安装和启动。请选择 Minecraft 1.21.x。";
+    return "";
+  }
+
+  public static void requireCompatibleVersion(String version) {
+    String reason = compatibilityReason(version);
+    if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
+  }
+
+  private static JSONObject withCompatibility(JSONObject item, String version) throws Exception {
+    String reason = compatibilityReason(version);
+    return item.put("supported", reason.isEmpty()).put("reason", reason)
+        .put("recommendedVersion", reason.isEmpty() ? "" : "1.21.x");
+  }
+
   public static File instance(String instanceId) throws IOException {
     File root = new File(Tools.DIR_GAME_NEW, "lite-instances").getCanonicalFile();
     File result = new File(root, id(instanceId)).getCanonicalFile();
@@ -173,16 +192,21 @@ public final class LiteVersions {
       JSONObject item = source.getJSONObject(i);
       if ("release".equals(item.optString("type")))
         list.put(
-            new JSONObject()
+            withCompatibility(new JSONObject()
                 .put("id", item.getString("id"))
-                .put("date", item.optString("releaseTime").split("T")[0]));
+                .put("date", item.optString("releaseTime").split("T")[0]), item.getString("id")));
     }
     return new JSONObject().put("items", list).put("cached", stale).put("loaders", loaders());
   }
 
   public synchronized JSONArray installed() throws Exception {
     if (!records.isFile()) return new JSONArray();
-    return new JSONArray(new String(new AtomicFile(records).readFully(), StandardCharsets.UTF_8));
+    JSONArray all = new JSONArray(new String(new AtomicFile(records).readFully(), StandardCharsets.UTF_8));
+    for (int i = 0; i < all.length(); i++) {
+      JSONObject item = all.getJSONObject(i);
+      withCompatibility(item, item.getString("version"));
+    }
+    return all;
   }
 
   public JSONObject find(String instanceId) throws Exception {
@@ -193,6 +217,7 @@ public final class LiteVersions {
   }
 
   public void select(JSONObject instance) throws Exception {
+    requireCompatibleVersion(instance.getString("version"));
     requireAutomaticLoader(instance.getString("loader"));
     String instanceId = id(instance.getString("id"));
     String profileId =
@@ -218,6 +243,7 @@ public final class LiteVersions {
 
   public JSONObject install(Activity activity, String version, String loader, String displayName) throws Exception {
     id(version);
+    requireCompatibleVersion(version);
     requireAutomaticLoader(loader);
     catalog(false);
     JSONObject metadata = null;
