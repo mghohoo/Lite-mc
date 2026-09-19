@@ -1,0 +1,15 @@
+/* Keep the desktop client quiet and practical: Lite-MC is a launcher, not a dashboard. */
+.card-kicker,.brand small,.service,.hero .eyebrow,.hero-status small,.hero-status strong,
+.mod-info,#status{letter-spacing:0;text-transform:none}
+.brand small{font:10px "Microsoft YaHei",system-ui,sans-serif;color:#6f8792}
+.service{font:11px "Microsoft YaHei",system-ui,sans-serif}
+.hero .eyebrow{font:11px "Microsoft YaHei",system-ui,sans-serif;font-weight:600}
+.hero h1{letter-spacing:-.03em;font-weight:750}
+.card-kicker{font:11px "Microsoft YaHei",system-ui,sans-serif;font-weight:600;color:#6e9680}
+.hero-status{padding:9px 12px 9px 28px}
+.hero-status small{font:10px "Microsoft YaHei",system-ui,sans-serif;color:#78958b}
+.hero-status strong{font:11px "Microsoft YaHei",system-ui,sans-serif;font-weight:600}
+.hero-status i{left:10px;top:17px}
+.mod-info{font:10px "Microsoft YaHei",system-ui,sans-serif}
+.empty-mods b{font:11px "Microsoft YaHei",system-ui,sans-serif;letter-spacing:0}
+.empty-mods span{font-size:11px}

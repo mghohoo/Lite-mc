@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="versions.css">
   <link rel="stylesheet" href="homepage.css">
   <link rel="stylesheet" href="promo-theme.css">
+  <link rel="stylesheet" href="lite-overrides.css">
   <link rel="stylesheet" href="pages.css">
 </head>
 <body>
@@ -27,40 +28,40 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div class="brand"><div><strong>LITE-MC</strong><small>CONTROL DECK / 1.1</small></div></div>
-        <div class="top-actions"><span class="service"><i></i>MOJANG ONLINE</span><button id="folder" class="ghost">游戏目录</button></div>
+        <div class="brand"><div><strong>LITE-MC</strong><small>轻量 Minecraft 启动器</small></div></div>
+        <div class="top-actions"><span class="service"><i></i>在线</span><button id="folder" class="ghost">游戏目录</button></div>
       </header>
 
       <section class="page hero active" data-page="home" id="home">
         <img src="assets/lite-mc-neon.png" alt="Lite-MC 霓虹体素世界">
         <div class="hero-shade"></div>
         <div class="hero-copy">
-          <p class="eyebrow">MINECRAFT · JAVA EDITION</p>
-          <h1>快 · 净 · 自由</h1>
-          <p class="subtitle">原版、Fabric、正版账号和 Mod，一台控制台全部搞定。</p>
-          <div class="hero-tags"><span>官方资源</span><span>极速缓存</span><span>版本沙盒</span></div>
+          <p class="eyebrow">LITE-MC</p>
+          <h1>轻装启动 Minecraft</h1>
+          <p class="subtitle">选版本，点启动。原版、Fabric、Forge 和离线模式都在这里。</p>
+          <div class="hero-tags"><span>原版</span><span>Fabric</span><span>Forge</span></div>
         </div>
         <div class="hero-status"><small>LAUNCH SYSTEM</small><strong>READY</strong><i></i></div>
       </section>
 
       <section class="page account-page" data-page="account" id="account">
         <article class="card profile">
-          <div class="card-kicker">PLAYER IDENTITY</div>
+          <div class="card-kicker">账号</div>
           <div class="profile-head"><h2>游戏档案</h2><span id="accountBadge">离线模式</span></div>
           <div class="profile-core">
             <div class="skin-stage"><canvas id="skinPreview" width="160" height="190"></canvas><span class="scan-line"></span></div>
-            <div class="profile-meta"><small>ACTIVE PROFILE</small><p class="profile-name" id="profileName">Player</p><div class="mode-row"><button class="mode active" data-mode="offline">离线</button><button class="mode" data-mode="online">微软正版</button></div></div>
+            <div class="profile-meta"><small>当前玩家</small><p class="profile-name" id="profileName">Player</p><div class="mode-row"><button class="mode active" data-mode="offline">离线</button><button class="mode" data-mode="online">微软正版</button></div></div>
           </div>
           <div id="offlinePanel"><label>游戏名称<input id="username" maxlength="16" placeholder="Player"></label><p class="hint">3–16 位英文、数字或下划线</p></div>
           <div id="onlinePanel" hidden><button id="login" class="login">登录 Microsoft 帐号</button><div class="model-row"><button class="model active" data-model="CLASSIC">Steve</button><button class="model" data-model="SLIM">Alex</button><button id="uploadSkin" class="small">上传皮肤</button></div><p class="hint">登录会话由 Windows 安全存储加密保存。</p></div>
-          <div class="skin-note"><b>SKIN STAGE</b><span>角色会轻微摆动；正版账号可上传皮肤并切换模型。</span></div>
+          <div class="skin-note"><b>皮肤</b><span>正版账号可以上传皮肤并切换 Steve / Alex 模型。</span></div>
         </article>
       </section>
 
       <section class="page play-page" data-page="play" id="play">
         <article class="card settings-card">
-          <div class="card-kicker">LAUNCH MATRIX</div>
-          <div class="panel-title"><div><h2>启动配置</h2><p>选择版本，然后构建你的游戏环境。</p></div><span class="matrix-state">AUTO</span></div>
+          <div class="card-kicker">启动</div>
+          <div class="panel-title"><div><h2>启动游戏</h2><p>选择版本和加载器。</p></div><span class="matrix-state">就绪</span></div>
           <div class="version-selectors"><label>游戏版本<select id="version"><option>正在加载版本…</option></select></label><label>加载器<select id="loader"><option value="vanilla">Vanilla 原版</option><option value="fabric">Fabric（自动装 API）</option><option value="forge">Forge</option><option value="liteloader">LiteLoader（旧版）</option><option value="optifine">OptiFine（官方安装器）</option></select></label></div>
           <button id="installVersion" class="install wide-install">下载这个版本</button>
           <div class="download-track"><span id="versionState">正在读取安装状态…</span><progress id="downloadProgress" max="100" value="0"></progress></div>
@@ -73,12 +74,12 @@
       </section>
 
       <section class="page card mods-card" data-page="mods" id="mods">
-        <div class="card-kicker">MOD RADAR</div>
-        <div class="mods-heading"><div><h2>Mod 中心</h2><p>兼容性过滤、依赖追踪和版本隔离。</p></div><button id="openMods" class="ghost small">打开当前版本 Mods 文件夹</button></div>
+        <div class="card-kicker">Mod</div>
+        <div class="mods-heading"><div><h2>Mod 中心</h2><p>按版本筛选，自动处理依赖。</p></div><button id="openMods" class="ghost small">打开 Mods 文件夹</button></div>
         <div class="mod-toolbar"><select id="modSource"><option value="modrinth">Modrinth</option><option value="curseforge">CurseForge</option></select><input id="modQuery" placeholder="搜索 Sodium、JEI、地图 Mod…"><button id="searchMods" class="install">搜索</button></div>
         <div id="curseForgeSetup" class="cf-setup" hidden><input id="curseForgeKey" type="password" autocomplete="off" placeholder="CurseForge API Key"><button id="saveCurseForgeKey" class="small">安全保存 Key</button><span id="curseForgeKeyState">尚未配置</span></div>
         <div class="mod-info"><span>● 当前版本自动过滤</span><span>● 必需依赖自动安装</span><span>● SHA-1 文件校验</span></div>
-        <div id="modResults" class="mod-results"><div class="empty-mods"><b>RADAR STANDBY</b><span>选择 Fabric、输入名称，然后搜索 Mod。</span></div></div>
+        <div id="modResults" class="mod-results"><div class="empty-mods"><b>还没有搜索</b><span>选择 Fabric，输入名称，然后搜索 Mod。</span></div></div>
         <p id="installedMods" class="installed-mods">已安装 Mod：正在读取…</p>
       </section>
 
@@ -87,7 +88,7 @@
         <div id="modDetailContent" class="mod-detail-content"></div>
       </section>
 
-      <section class="page card console" data-page="console" id="console"><div class="console-title"><div><div class="card-kicker">SYSTEM LOG</div><h2>运行记录</h2></div><button id="clear" class="ghost small">清空</button></div><pre id="log">Lite-MC 控制台已上线。等待指令。</pre></section>
+      <section class="page card console" data-page="console" id="console"><div class="console-title"><div><div class="card-kicker">日志</div><h2>运行记录</h2></div><button id="clear" class="ghost small">清空</button></div><pre id="log">Lite-MC 已就绪。</pre></section>
     </main>
   </div>
   <script src="renderer.js"></script>
