@@ -1,0 +1,17 @@
+{
+  "version": 8,
+  "scaledAt": 100,
+  "mDrawerDataList": [],
+  "mJoystickDataList": [{"name":"移动摇杆","width":150,"height":150,"dynamicX":"px(22)","dynamicY":"${screen_height} - ${height} - px(24)","bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":100,"opacity":0.8,"displayInGame":true,"displayInMenu":false,"absolute":false,"forwardLock":false,"keycodes":[0,0,0,0]}],
+  "mControlDataList": [
+    {"name":"跳跃","width":64,"height":64,"dynamicX":"${screen_width} - ${width} - px(32)","dynamicY":"${screen_height} - ${height} - px(38)","keycodes":[32,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":100,"opacity":0.85,"displayInGame":true,"displayInMenu":false},
+    {"name":"攻击","width":62,"height":62,"dynamicX":"${screen_width} - ${width} - px(111)","dynamicY":"${screen_height} - ${height} - px(95)","keycodes":[-3,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":100,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"使用","width":52,"height":52,"dynamicX":"${screen_width} - ${width} - px(32)","dynamicY":"${screen_height} - ${height} - px(123)","keycodes":[-4,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":100,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"潜行","width":58,"height":44,"dynamicX":"${screen_width} - ${width} - px(110)","dynamicY":"${screen_height} - ${height} - px(28)","keycodes":[340,0,0,0],"isToggle":true,"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":18,"opacity":0.85,"displayInGame":true,"displayInMenu":false},
+    {"name":"疾跑","width":58,"height":44,"dynamicX":"${screen_width} - ${width} - px(178)","dynamicY":"${screen_height} - ${height} - px(28)","keycodes":[341,0,0,0],"isToggle":true,"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":18,"opacity":0.85,"displayInGame":true,"displayInMenu":false},
+    {"name":"背包","width":72,"height":40,"dynamicX":"${screen_width} - ${width} - px(24)","dynamicY":"px(18)","keycodes":[69,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"暂停","width":60,"height":40,"dynamicX":"px(22)","dynamicY":"px(18)","keycodes":[256,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"菜单","width":56,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2","dynamicY":"px(18)","keycodes":[-9,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"文字输入","width":72,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2 - px(78)","dynamicY":"px(18)","keycodes":[84,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true}
+  ]
+}

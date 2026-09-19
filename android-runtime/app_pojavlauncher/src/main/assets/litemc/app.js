@@ -1,0 +1,142 @@
+'use strict';
+const pageStyles = document.createElement('link'); pageStyles.rel = 'stylesheet'; pageStyles.href = 'pages.css'; document.querySelector('head').append(pageStyles);
+const $ = id => document.getElementById(id);
+const pending = new Map(); let sequence = 0, state = {}, loader = 'vanilla', selectedSkin = '', loginFlow = '', loginTimer, toastTimer, busy = false, language = 'zh';
+const text = (zh, en) => language === 'en' ? en : zh;
+function call(action, args = {}) {
+  if (!window.LiteNative) return Promise.reject(new Error(text('这是界面预览，请在 Android APK 中使用此功能。', 'UI preview only. Use the Android APK for this action.')));
+  return new Promise((resolve, reject) => { const id = String(++sequence); pending.set(id, {resolve, reject}); window.LiteNative.request(id, action, JSON.stringify(args)); });
+}
+window.LiteEvent = (name, data) => {
+  if (name === 'reply') { const item = pending.get(data.id); if (!item) return; pending.delete(data.id); data.error ? item.reject(new Error(data.error)) : item.resolve(data.data); }
+  if (name === 'ready') { state.ready = true; refresh().catch(showError); }
+  if (name === 'error') toast(data.message);
+  if (name === 'progress' && busy) { $('task-message').textContent = data.message; $('task-progress').value = Math.max(0, Math.min(100, data.percent)); }
+};
+function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 6500); }
+function showError(error) { toast(error.message || String(error)); }
+async function run(button, job, progress = false) {
+  if (busy) return toast(text('请等待当前操作完成。', 'Please wait for the current operation.'));
+  busy = true; if (button) button.disabled = true;
+  if (progress) { $('task-panel').hidden = false; $('task-message').textContent = text('正在准备… 首次安装可能需要较长时间，请保持应用在前台。', 'Preparing… Keep the app in the foreground during the first installation.'); $('task-progress').removeAttribute('value'); }
+  try { await job(); } catch (error) { showError(error); }
+  finally { busy = false; if (button) button.disabled = false; $('task-panel').hidden = true; updateLaunch(); }
+}
+function node(tag, className, content) { const item = document.createElement(tag); if (className) item.className = className; if (content !== undefined) item.textContent = content; return item; }
+function empty(target, message) { target.replaceChildren(node('div', 'empty', message)); }
+function selected() { return (state.instances || []).find(item => item.id === $('instance-select').value); }
+function settings() { return {language: $('language').value, memory: Number($('memory').value), motion: $('motion').checked, model: window.LiteSkin.model, controlScale: Number($('control-scale').value)}; }
+function translate() {
+  document.documentElement.lang = language === 'en' ? 'en' : 'zh-CN';
+  document.querySelectorAll('[data-zh]').forEach(item => item.textContent = (language === 'en' ? item.dataset.en : item.dataset.zh).replace(/\\n/g, '\n'));
+  if (language === 'zh') {
+    const brandSmall = document.querySelector('.brand small');
+    const railNote = document.querySelector('.rail-note');
+    const modTab = document.querySelector('[data-page="mods"] label');
+    const homeEyebrow = document.querySelector('#home .eyebrow');
+    if (brandSmall) brandSmall.textContent = '轻量 · 自由 · 中文版';
+    if (railNote) railNote.innerHTML = '<i></i> 轻一点，玩自己的';
+    if (modTab) modTab.textContent = '模组';
+    if (homeEyebrow) homeEyebrow.textContent = '你的下一场冒险';
+    document.querySelectorAll('.eyebrow').forEach(item => {
+      if (item.textContent === 'YOUR NEXT ADVENTURE') item.textContent = '你的下一场冒险';
+      if (item.textContent === 'LITE-MC / ANDROID') item.textContent = 'LITE-MC / 安卓版';
+      if (item.textContent === 'BUILD YOUR COLLECTION') item.textContent = '我的游戏版本';
+      if (item.textContent === 'LESS LIMITS. MORE POSSIBILITIES.') item.textContent = '更多玩法，更多可能';
+      if (item.textContent === 'BE YOURSELF') item.textContent = '成为你自己';
+      if (item.textContent === 'FINELY TUNED') item.textContent = '调整到刚刚好';
+    });
+  }
+  window.LiteSkin.motion = $('motion').checked;
+  const titles = {home: text('准备好，出发。', 'Ready for your next world.'), versions: text('版本仓库', 'Your collection'), downloads: text('下载新版本', 'Download a version'), mods: text('模组实验室', 'Mod workshop'), 'mod-detail': text('Mod 详情', 'Mod details'), profile: text('我的角色', 'Your identity'), settings: text('调整到刚刚好', 'Make yourself at home')};
+  $('page-title').textContent = titles[document.querySelector('.page.active').id];
+}
+function page(name) {
+  document.querySelectorAll('.page').forEach(item => item.classList.toggle('active', item.id === name));
+  document.querySelectorAll('[data-page]').forEach(item => item.classList.toggle('active', item.dataset.page === name));
+  translate(); window.scrollTo(0, 0);
+  if (name === 'versions' && !$('version-select').dataset.loaded) catalog(false).catch(showError);
+}
+window.LiteBack = () => page('home');
+document.querySelectorAll('[data-page],[data-go]').forEach(button => button.addEventListener('click', () => page(button.dataset.page || button.dataset.go)));
+document.querySelector('.brand').addEventListener('click', event => { event.preventDefault(); page('home'); });
+function updateLaunch() {
+  const item = selected(); $('launch').disabled = busy || !state.ready || !item;
+  $('loader-label').textContent = item ? item.loader.toUpperCase() : 'Vanilla / Fabric';
+  $('memory-label').textContent = (state.memory || 2048) + ' MB';
+  $('runtime-state').textContent = state.ready ? 'RUNTIME READY' : text('运行组件准备中', 'PREPARING RUNTIME');
+  $('mod-target').textContent = item ? text('安装目标：', 'Target: ') + item.version + ' / ' + item.loader.toUpperCase() : text('先在主页选择一个已安装的 Fabric 实例。', 'Select an installed Fabric instance on Home first.');
+}
+async function refresh() {
+  state = await call('state'); language = state.language || 'zh';
+  const account = state.account || {}; const name = account.name || 'Player';
+  $('account-name').textContent = name; $('skin-name').textContent = name; $('account-type').textContent = account.mode === 'online' ? 'MICROSOFT' : 'OFFLINE';
+  $('offline-name').value = account.mode === 'offline' ? name : 'Player';
+  $('language').value = language; $('memory').value = state.memory || 2048; $('motion').checked = state.motion !== false;
+  $('control-scale').value = state.controlScale || 100; $('client-id').value = account.clientId || '';
+  if (!selectedSkin) setModel((account.mode === 'online' ? (account.model || state.model || 'classic') : (state.model || 'classic')).toLowerCase());
+  $('instance-select').replaceChildren();
+  (state.instances || []).forEach(item => { const option = node('option', '', item.version + ' · ' + item.loader.toUpperCase()); option.value = item.id; $('instance-select').append(option); });
+  if (!state.instances || !state.instances.length) { const option = node('option', '', text('先安装一个版本', 'Install a version first')); option.value = ''; $('instance-select').append(option); }
+  if (state.selected) $('instance-select').value = state.selected;
+  if (!$('instance-select').value && state.instances && state.instances[0]) $('instance-select').value = state.instances[0].id;
+  renderInstances(); translate(); updateLaunch();
+  if (!selectedSkin) { const skin = await call('skin.read').catch(() => ({})); if (skin.base64) window.LiteSkin.load(skin.base64); }
+}
+function renderInstances() {
+  const items = state.instances || []; $('instance-count').textContent = String(items.length); $('instance-list').replaceChildren();
+  if (!items.length) return empty($('instance-list'), text('你的收藏还是空的。安装原版，或者加上 Fabric 开始模组冒险。', 'Your collection is empty. Install Vanilla or add Fabric for mods.'));
+  items.forEach(item => { const row = node('article', 'list-row'); row.append(node('span','row-icon','▦')); const details = node('div','details'); details.append(node('b','',item.name || item.version), node('p','',item.version + ' · ' + item.loader.toUpperCase() + (item.loaderVersion ? ' / ' + item.loaderVersion : ''))); const button = node('button','secondary',text('使用此版本','Select')); button.addEventListener('click', () => run(button, async () => { await call('select',{instanceId:item.id}); await refresh(); page('home'); })); row.append(details,button); $('instance-list').append(row); });
+}
+async function catalog(force) {
+  const response = await call('catalog', {refresh: force}); const old = $('version-select').value; $('version-select').replaceChildren();
+  response.items.forEach(item => { const option = node('option', '', item.id + '  /  ' + item.date); option.value = item.id; $('version-select').append(option); });
+  if (response.items.some(item => item.id === old)) $('version-select').value = old;
+  $('version-select').dataset.loaded = 'true'; if (response.cached) toast(text('网络不可用，已载入缓存版本列表。', 'Offline: showing the cached version list.'));
+  if (window.LiteSyncDownloadVersions) window.LiteSyncDownloadVersions();
+}
+document.querySelectorAll('[data-loader]').forEach(button => button.addEventListener('click', () => { if (button.dataset.unavailable === 'true') return toast(text(`${button.dataset.loader} 将在运行核心适配后开放。`, `${button.dataset.loader} will be available after runtime integration.`)); loader = button.dataset.loader; document.querySelectorAll('[data-loader]').forEach(item => item.classList.toggle('selected', item === button)); }));
+$('refresh-catalog').onclick = () => run($('refresh-catalog'), () => catalog(true));
+$('instance-select').onchange = () => run(null, async () => { const item = selected(); if (item) await call('select', {instanceId:item.id}); updateLaunch(); });
+$('install').onclick = () => run($('install'), async () => { if (!$('version-select').dataset.loaded) throw new Error(text('请先加载版本列表。','Load the version list first.')); await call('install',{version:$('version-select').value,loader}); await refresh(); toast(text('安装完成，已加入我的版本。','Installed and added to your collection.')); }, true);
+$('launch').onclick = () => run($('launch'), async () => { await call('launch',{instanceId:selected().id}); toast(text('正在打开游戏运行窗口…','Opening the game runtime…')); }, true);
+$('save-offline').onclick = () => run($('save-offline'), async () => { const name = $('offline-name').value.trim(); if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) throw new Error(text('名字需要 3–16 位字母、数字或下划线。','Use 3–16 letters, digits or underscores.')); await call('accounts.offline',{name}); clearTimeout(loginTimer); loginFlow = ''; $('login-flow').hidden = true; await refresh(); toast(text('离线账号已保存。','Offline profile saved.')); });
+function setModel(model) { window.LiteSkin.model = model === 'slim' ? 'slim' : 'classic'; document.querySelectorAll('[data-model]').forEach(button => button.classList.toggle('selected', button.dataset.model === window.LiteSkin.model)); }
+document.querySelectorAll('[data-model]').forEach(button => button.addEventListener('click', () => run(button, async () => { setModel(button.dataset.model); await call('settings', settings()); })));
+$('pick-skin').onclick = () => run($('pick-skin'), async () => { const skin = await call('skin.pick'); if (skin.base64) { selectedSkin = skin.base64; await window.LiteSkin.load(selectedSkin); } });
+$('upload-skin').onclick = () => run($('upload-skin'), async () => { if (!selectedSkin) throw new Error(text('请先选择 PNG 皮肤。','Choose a PNG skin first.')); await call('accounts.skin',{base64:selectedSkin,model:window.LiteSkin.model}); await refresh(); toast(text('皮肤已更新到正版账号。','Your online skin has been updated.')); });
+$('save-settings').onclick = () => run($('save-settings'), async () => { await call('settings',settings()); await refresh(); toast(text('设置已保存。','Settings saved.')); });
+$('language').onchange = () => { language = $('language').value; translate(); };
+$('motion').onchange = () => window.LiteSkin.motion = $('motion').checked;
+$('save-client').onclick = () => run($('save-client'), async () => { await call('accounts.config',{clientId:$('client-id').value.trim()}); toast(text('应用 ID 已保存。','Client ID saved.')); });
+$('save-key').onclick = () => run($('save-key'), async () => { await call('mods.config',{curseforgeKey:$('curse-key').value.trim()}); $('curse-key').value = ''; toast(text('API key 已加密保存。','API key saved securely.')); });
+$('login').onclick = () => run($('login'), async () => { const flow = await call('accounts.login.start'); loginFlow = flow.flowId; $('login-code').textContent = flow.userCode; $('login-flow').hidden = false; schedulePoll(Math.max(5,flow.interval || 5)); });
+function schedulePoll(seconds) { clearTimeout(loginTimer); loginTimer = setTimeout(() => { if (loginFlow && !busy) pollLogin().catch(showError); else if (loginFlow) schedulePoll(seconds); }, seconds * 1000); }
+async function pollLogin() {
+  if (!loginFlow) return; const response = await call('accounts.login.poll', {flowId:loginFlow});
+  if (response.pending || response.status === 'pending') { schedulePoll(Math.max(5,response.interval || 5)); return; }
+  loginFlow = ''; clearTimeout(loginTimer); $('login-flow').hidden = true; selectedSkin = ''; await refresh(); toast(text('登录成功，会话已安全保存。','Signed in. Your session is stored securely.'));
+}
+$('poll-login').onclick = () => run($('poll-login'), pollLogin);
+$('open-login').onclick = () => run($('open-login'), () => call('browser.login'));
+$('logout').onclick = () => run($('logout'), async () => { clearTimeout(loginTimer); loginFlow = ''; await call('accounts.logout'); $('login-flow').hidden = true; await refresh(); });
+function modArgs() { const item = selected(); if (!item) throw new Error(text('请先安装并选择 Fabric 实例。','Install and select a Fabric instance first.')); return {provider:$('mod-provider').value,version:item.version,loader:item.loader,instanceId:item.id}; }
+function modIcon(item) { const icon = node('div', 'row-icon mod-result-icon', String(item.title || item.id || 'M').trim().slice(0, 1).toUpperCase()); if (item.iconUrl && /^https:\/\//.test(item.iconUrl)) { const image = document.createElement('img'); image.src = item.iconUrl; image.alt = ''; image.addEventListener('error', () => image.remove()); icon.textContent = ''; icon.append(image); } return icon; }
+function installMod(item, args, button) { return run(button, async () => { await call('mods.install',{...args,projectId:item.id}); toast(text('模组及必需依赖已安装。','Mod and required dependencies installed.')); },true); }
+function showModDetail(item, args) { $('mod-detail-icon').replaceChildren(modIcon(item)); $('mod-detail-source').textContent = (item.source || args.provider || 'MOD').toUpperCase(); $('mod-detail-title').textContent = item.title || item.id; $('mod-detail-meta').textContent = [item.author, Number(item.downloads || 0).toLocaleString() + ' ' + text('下载', 'downloads')].filter(Boolean).join(' · '); $('mod-detail-description').textContent = item.description || text('该 Mod 未提供项目说明。', 'This mod has no project description.'); const link = $('mod-detail-link'); const validLink = item.pageUrl && /^https:\/\//.test(item.pageUrl); link.hidden = !validLink; if (validLink) link.href = item.pageUrl; $('mod-detail-install').onclick = () => installMod(item, args, $('mod-detail-install')); page('mod-detail'); }
+$('mod-back').onclick = () => page('mods');
+$('mod-search').onclick = () => run($('mod-search'), async () => { const args = {...modArgs(),query:$('mod-query').value.trim()}; const result = await call('mods.search',args); $('mod-results').replaceChildren(); if (!result.items.length) return empty($('mod-results'),text('没有找到兼容的模组。','No compatible mods found.')); result.items.forEach(item => { const row = node('article','list-row mod-result'); const detail = node('div','details'); detail.append(node('b','',item.title),node('p','',item.description)); const install = node('button','secondary',text('安装','Install')); install.onclick = () => installMod(item,args,install); const more = node('button','text-button mod-more',text('详情','Details')); more.onclick = () => showModDetail(item,args); row.append(modIcon(item),detail,install,more); $('mod-results').append(row); }); });
+$('mod-files').onclick = () => run($('mod-files'), async () => { const result = await call('mods.list',modArgs()); $('mod-file-list').replaceChildren(); if (!result.items.length) return empty($('mod-file-list'),text('文件夹已经就绪，目前没有 Mod。','Folder ready. No mods installed yet.')); result.items.forEach(item => { const row = node('article','list-row'); const detail = node('div','details'); detail.append(node('b','',item.name),node('p','',(item.size/1048576).toFixed(2)+' MB')); row.append(node('span','row-icon','◇'),detail); $('mod-file-list').append(row); }); });
+function setupDownloadPage() {
+  const nav = node('button'); nav.dataset.page = 'downloads'; nav.innerHTML = '<span>↓</span><label>下载</label>'; document.querySelector('nav').append(nav); nav.addEventListener('click', () => page('downloads'));
+  const pageNode = node('section'); pageNode.id = 'downloads'; pageNode.className = 'page'; pageNode.innerHTML = '<div class="section-heading"><div><span class="eyebrow">LITE-MC 下载中心</span><h2>下载一个新的游戏版本。</h2></div></div><div class="card install-form"><label>版本名称<input id="download-name" maxlength="32" placeholder="例如：生存 1.20.1 Fabric"></label><label>Minecraft 版本<select id="download-version-control"><option>正在加载官方版本…</option></select></label><fieldset><legend>加载器</legend><div class="segmented"><button class="selected" data-download-loader="vanilla">原版 <small>纯净 Minecraft</small></button><button data-download-loader="fabric">Fabric <small>轻量模组</small></button></div></fieldset><p class="fine">同一个 Minecraft 版本可以重复安装，每次会创建独立实例和独立 Mod 文件夹。</p><button id="download-install" class="primary">下载并安装</button></div>'; document.querySelector('main').append(pageNode);
+  if (!pageNode.querySelector('#download-install')) return;
+  const versionSelect = $('version-select'), downloadVersion = document.getElementById('download-version-control');
+  const sync = () => { if (versionSelect && downloadVersion && versionSelect.options && downloadVersion.options) downloadVersion.innerHTML = versionSelect.innerHTML; };
+  $('version-select').addEventListener('change', sync); document.querySelector('[data-go="versions"]')?.addEventListener('click', () => setTimeout(sync, 20));
+  let downloadLoader = 'vanilla'; document.querySelectorAll('[data-download-loader]').forEach(button => button.addEventListener('click', () => { downloadLoader = button.dataset.downloadLoader; document.querySelectorAll('[data-download-loader]').forEach(item => item.classList.toggle('selected', item === button)); }));
+  document.getElementById('download-install').onclick = () => run(document.getElementById('download-install'), async () => { const version = document.getElementById('download-version-control').value; if (!version || version.includes('加载')) throw new Error('请先加载官方版本列表'); await call('install', {version, loader:downloadLoader, name:document.getElementById('download-name').value.trim()}); await refresh(); toast('版本安装完成，已创建新的独立实例。'); page('versions'); }, true);
+  window.LiteSyncDownloadVersions = sync;
+}
+setupDownloadPage();
+refresh().catch(error => { if (window.LiteNative) showError(error); else { $('runtime-state').textContent = 'UI PREVIEW · ANDROID REQUIRED'; empty($('instance-list'), 'UI preview — no game is installed here.'); } });

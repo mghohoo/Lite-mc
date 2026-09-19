@@ -1,0 +1,58 @@
+{
+  "name": "mc-lite",
+  "version": "1.1.0",
+  "description": "轻量、快速，支持 Fabric、Mod 管理与微软正版登录的 Minecraft Java 启动器",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/renderer.js",
+    "dist": "electron-builder --win portable nsis"
+  },
+  "keywords": [],
+  "author": "Lite-MC Team",
+  "license": "ISC",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.litemc.launcher",
+    "productName": "Lite-MC",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "Lite-MC-${version}-Portable-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Lite-MC-${version}-Setup-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Lite-MC"
+    }
+  },
+  "dependencies": {
+    "minecraft-launcher-core": "^3.18.2",
+    "msmc": "^5.0.5"
+  },
+  "devDependencies": {
+    "electron": "^44.4.1",
+    "electron-builder": "^26.15.3"
+  }
+}

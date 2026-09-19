@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Lite-MC：集成 Fabric、双平台 Mod 搜索、版本沙盒、正版登录和极速缓存的轻量 Minecraft Java 启动器。">
+  <meta name="theme-color" content="#050910">
+  <meta property="og:title" content="Lite-MC — 快 · 净 · 自由">
+  <meta property="og:description" content="启动、加载器、Mod 与皮肤管理，一台控制台全部完成。">
+  <meta property="og:image" content="https://lite-mc-launcher.hawkish-talker-0.chatgpt.site/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://lite-mc-launcher.hawkish-talker-0.chatgpt.site/og.png">
+  <title>Lite-MC — 快 · 净 · 自由</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23050910'/%3E%3Cpath d='M8 7h6v13h10v6H8z' fill='%2361f0a4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="downloads.css">
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+  <header class="nav"><a class="brand" href="#top"><i>L</i><b>LITE-MC</b><small>LAB</small></a><nav><a href="#systems">独家功能</a><a href="#flow">使用流程</a><a href="#download">下载</a></nav><a class="nav-cta" href="#download">下载 EXE ↘</a></header>
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy reveal"><span class="status"><i></i> LITE-MC 1.1 · MOD READY</span><p class="overline">MINECRAFT · JAVA EDITION</p><h1>别让启动器，<br><em>挡在世界前面。</em></h1><p class="lead">原版、Fabric、正版账号和 Mod，一台霓虹控制台全部搞定。复杂留在幕后，只把“开始游戏”留给你。</p><div class="actions"><a class="primary" href="#download">免安装 EXE <b>↓</b></a><a class="secondary" href="#systems">查看独家功能</a></div><div class="trust"><span>✓ Mojang 官方资源</span><span>✓ 本地安全存储</span><span>✓ 无需安装 Node.js</span></div></div>
+      <div class="hero-art reveal" data-tilt><img src="og.png" alt="Lite-MC 霓虹体素世界与启动器界面"><div class="scan"></div><div class="chip one"><small>重复启动</small><b>秒级就绪</b></div><div class="chip two"><small>MOD SOURCE</small><b>MR + CF</b></div></div>
+    </section>
+
+    <section class="manifest reveal"><p>不是“大而全”。</p><h2>是每一步都更短，<br>每一次启动都更确定。</h2><div class="stats"><div><b>2</b><span>Mod 平台</span></div><div><b>16×</b><span>资源并发</span></div><div><b>0</b><span>密码托管</span></div><div><b>∞</b><span>版本沙盒</span></div></div></section>
+
+    <section class="systems" id="systems"><div class="section-head reveal"><p>EXCLUSIVE SYSTEMS</p><h2>我们的独家功能</h2><span>围绕少等待、少出错设计，而不是给启动器堆满无用按钮。</span></div><div class="feature-grid">
+      <article class="feature wide reveal"><span class="num">01</span><div><label>LITE CACHE</label><h3>启动缓存引擎</h3><p>首次安装完成后缓存依赖路径，跳过重复的全量资源扫描。第二次进入，不再检查已经确认过的文件。</p><div class="cache-line"><i></i><b>准备完成</b><small>资产检查命中缓存</small></div></div><div class="orb"><span>FAST</span><b>↓</b><small>WAIT TIME</small></div></article>
+      <article class="feature reveal"><span class="num">02</span><label class="blue">INSTANCE VAULT</label><h3>版本沙盒</h3><p>每个 Fabric 版本独立保存 Mods、配置和存档，跨版本不再互相破坏。</p><div class="folders"><i>fabric-1.21.8</i><i>fabric-1.20.1</i><i>vanilla</i></div></article>
+      <article class="feature reveal"><span class="num">03</span><label class="purple">DEPENDENCY RADAR</label><h3>智能依赖链</h3><p>安装 Mod 时自动追踪必需前置，一次点击把主文件与依赖放到正确目录。</p><div class="nodes"><i>MOD</i><b>→</b><i>API</i><b>→</b><i>LIB</i></div></article>
+      <article class="feature wide source-feature reveal"><span class="num">04</span><div><label>DUAL SOURCE</label><h3>一个搜索框，两个 Mod 世界。</h3><p>Modrinth 开箱即用；CurseForge Key 使用 Windows 安全存储加密。结果按当前版本与 Fabric 自动过滤。</p></div><div class="source-box"><div class="tabs"><button class="active" data-source="mr">Modrinth</button><button data-source="cf">CurseForge</button></div><div class="source-result"><i>M</i><div><b id="sourceTitle">无需配置，开箱即搜</b><small id="sourceText">版本过滤 · 依赖追踪 · SHA-1 校验</small></div><em>READY</em></div></div></article>
+      <article class="feature reveal"><span class="num">05</span><label class="gold">SKIN STAGE</label><h3>会呼吸的皮肤预览</h3><p>主页显示正版皮肤，Steve 与 Alex 模型随时切换，角色只做恰到好处的轻微动作。</p><div class="skin"><i class="head"></i><i class="body"></i><i class="arm l"></i><i class="arm r"></i><i class="leg l"></i><i class="leg r"></i></div></article>
+      <article class="feature reveal"><span class="num">06</span><label class="blue">STAY SIGNED IN</label><h3>登录一次，继续冒险</h3><p>Microsoft 刷新凭据由系统加密保存。不会存密码，随时可以退出并清除。</p><div class="secure"><i></i><b>会话已加密</b><small>WINDOWS SAFE STORAGE</small></div></article>
+    </div></section>
+
+    <section class="flow" id="flow"><div class="section-head reveal"><p>THREE STEPS</p><h2>世界离你只有三步</h2></div><div class="steps"><article class="reveal"><b>01</b><small>SELECT</small><h3>选版本与加载器</h3><p>Vanilla 或 Fabric，安装状态一眼可见。</p></article><article class="reveal"><b>02</b><small>BUILD</small><h3>自动准备环境</h3><p>游戏、依赖、资源与官方 Java 一次完成。</p></article><article class="reveal"><b>03</b><small>PLAY</small><h3>带着身份进入</h3><p>微软正版或离线名称，按下启动即可。</p></article></div></section>
+
+    <section class="download reveal" id="download"><div><p>READY WHEN YOU ARE</p><h2>下一格，<br>就是你的世界。</h2><span>Windows 10/11 · 64 位 · 无需 Node.js</span></div><div class="download-options"><a href="#" data-exe-download><i>⊞</i><div><small>免安装 · 推荐</small><b>下载 Lite-MC.exe</b><em id="fileSize">98.0 MB · EXE</em></div><strong>↓</strong></a><a href="downloads/lite-mc-source.zip" download><i>⌘</i><div><small>开发者选项</small><b>下载源码包</b><em>ZIP</em></div><strong>↓</strong></a></div></section>
+  </main>
+  <footer><a class="brand" href="#top"><i>L</i><b>LITE-MC</b></a><p>快 · 净 · 自由</p><span>非 Mojang、Microsoft、Modrinth 或 CurseForge 官方产品。</span></footer>
+  <script src="app.js"></script>
+</body>
+</html>
