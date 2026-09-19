@@ -772,6 +772,9 @@ ipcMain.handle('launch', async (_, input) => {
       version: launchVersion,
       memory: { min: '1G', max: `${settings.memory}M` },
       customArgs: loader === 'forge' ? installMetadata.jvmArgs : undefined,
+      // 1.21.x can keep a stale options.txt cache on first boot. Passing the
+      // official client flag as well makes the selected language authoritative.
+      customLaunchArgs: ['--language', language],
       // Mojang official endpoints, with a larger connection pool for assets.
       overrides: fastOverrides,
       window: { width: 1280, height: 720, fullscreen: false }
