@@ -18,6 +18,8 @@ let running = false;
 let installing = false;
 let onlineAccount = null; // Kept only in memory: never write a bearer token to disk.
 let restoreAccountPromise = null;
+let launcherChatFile = null;
+let launcherChatOffset = 0;
 const launcher = new Client();
 const settingsPath = () => path.join(app.getPath('userData'), 'lite-mc.json');
 const authSessionPath = () => path.join(app.getPath('userData'), 'lite-mc-auth.bin');
@@ -113,6 +115,36 @@ function applyGameLanguage(language, directory = gameRoot()) {
   fs.renameSync(temporary, optionsPath);
 }
 function send(channel, value) { windowRef?.webContents.send(channel, value); }
+function stopLauncherChatBridge() {
+  if (launcherChatFile) fs.unwatchFile(launcherChatFile);
+  launcherChatFile = null; launcherChatOffset = 0;
+}
+function startLauncherChatBridge(directory) {
+  stopLauncherChatBridge();
+  launcherChatFile = path.join(directory, 'logs', 'latest.log');
+  const readNewChat = () => {
+    if (!launcherChatFile || !fs.existsSync(launcherChatFile)) return;
+    try {
+      const stat = fs.statSync(launcherChatFile);
+      if (stat.size < launcherChatOffset) launcherChatOffset = 0;
+      if (stat.size === launcherChatOffset) return;
+      const handle = fs.openSync(launcherChatFile, 'r');
+      const buffer = Buffer.alloc(stat.size - launcherChatOffset);
+      fs.readSync(handle, buffer, 0, buffer.length, launcherChatOffset); fs.closeSync(handle);
+      launcherChatOffset = stat.size;
+      const appended = buffer.toString('utf8');
+      const command = /\/(?:lachuner|launcher)\s+tell\s+([^\r\n]+)/gi;
+      for (const match of appended.matchAll(command)) {
+        const message = match[1].trim().slice(0, 300);
+        if (!message) continue;
+        send('launcher-message', { text: `收到游戏消息：${message}` });
+        send('log', { type: 'info', message: `启动器彩蛋：已收到“${message}”` });
+      }
+    } catch {}
+  };
+  readNewChat();
+  fs.watchFile(launcherChatFile, { interval: 350 }, readNewChat);
+}
 function redactLog(value) {
   return String(value).replace(/(--accessToken\s+)\S+/gi, '$1<已隐藏>').replace(/(--clientToken\s+)\S+/gi, '$1<已隐藏>');
 }
@@ -720,6 +752,10 @@ ipcMain.handle('launch', async (_, input) => {
     const fastOverrides = { maxSockets: 16, liteMcSkipAssetCheck: true };
     if (Array.isArray(installMetadata.classes) && installMetadata.classes.length) fastOverrides.classes = installMetadata.classes;
     const launchVersion = { number: settings.version, type: 'release' };
+    // Always pass an explicit game directory. Vanilla previously relied on
+    // MCLC's implicit root while loader instances used an override, which
+    // made 1.21.x options (especially lang) appear to be ignored.
+    fastOverrides.gameDirectory = playDirectory;
     if (loader !== 'vanilla') {
       if (!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,119}$/.test(installMetadata.customId || '')) throw new Error(`${LOADER_NAMES[loader]} 安装信息损坏，请重新下载该版本。`);
       verifyInstalledClasses(installMetadata.classes);
@@ -728,7 +764,6 @@ ipcMain.handle('launch', async (_, input) => {
       fastOverrides.minecraftJar = path.join(gameRoot(), 'versions', settings.version, `${settings.version}.jar`);
       const vanilla = JSON.parse(fs.readFileSync(fastOverrides.versionJson, 'utf8'));
       fastOverrides.assetIndex = vanilla.assetIndex?.id || vanilla.assets || settings.version;
-      fastOverrides.gameDirectory = playDirectory;
     }
     if (loader === 'forge' && (!Array.isArray(installMetadata.jvmArgs) || installMetadata.jvmArgs.some(value => typeof value !== 'string' || /[\x00\r\n]/.test(value)))) throw new Error('Forge JVM 参数缺失或损坏，请重新安装。');
     const child = await launcher.launch({
@@ -747,8 +782,10 @@ ipcMain.handle('launch', async (_, input) => {
     // the "running" state with no game process.
     if (!child) throw new Error('Minecraft 未能启动。请查看日志，并确认 Java 路径及其版本与所选游戏版本兼容。');
     send('status', { running: true, text: 'Minecraft 正在运行' });
-    child?.on('close', code => { running = false; send('status', { running: false, text: `游戏已退出（代码 ${code}）` }); });
+    startLauncherChatBridge(playDirectory);
+    child?.on('close', code => { stopLauncherChatBridge(); running = false; send('status', { running: false, text: `游戏已退出（代码 ${code}）` }); });
   } catch (error) {
+    stopLauncherChatBridge();
     running = false; send('status', { running: false, text: '启动失败' });
     throw error;
   }

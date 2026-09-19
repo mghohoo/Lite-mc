@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('liteMC', {
   listMods: value => ipcRenderer.invoke('mods:list', value),
   openModsFolder: value => ipcRenderer.invoke('mods:open-folder', value),
   onLog: fn => ipcRenderer.on('log', (_, value) => fn(value)),
+  onLauncherMessage: fn => ipcRenderer.on('launcher-message', (_, value) => fn(value)),
   onStatus: fn => ipcRenderer.on('status', (_, value) => fn(value)),
   onInstallProgress: fn => ipcRenderer.on('install-progress', (_, value) => fn(value))
 });
