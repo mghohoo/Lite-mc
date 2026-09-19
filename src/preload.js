@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('liteMC', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   getVersions: value => ipcRenderer.invoke('versions:get', value),
+  getLoaders: version => ipcRenderer.invoke('loaders:get', { version }),
   installVersion: value => ipcRenderer.invoke('version:install', value),
   launch: value => ipcRenderer.invoke('launch', value),
   openFolder: () => ipcRenderer.invoke('folder:open'),

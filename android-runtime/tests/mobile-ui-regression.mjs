@@ -164,6 +164,20 @@ await test('language change updates in place without removing controls', async (
   assert.equal(h.document.documentElement.lang,'en'); assert.ok(h.get('version-select')); assert.equal(h.get('account-name').textContent,'Test_Player');
   await h.get('save-settings').dispatch('click'); await settle(); assert.equal(h.fixture.language,'en');
 });
+await test('unavailable loader displays native capability reason without changing selection', async () => {
+  const h=await harness({loaders:[{id:'forge',automaticInstall:false,reason:'TEST_FORGE_ANDROID_REASON'}]});
+  await h.document.querySelector('[data-loader="forge"]').dispatch('click');
+  assert.equal(h.get('toast').textContent,'TEST_FORGE_ANDROID_REASON');
+  assert.equal(h.run('loader'),'vanilla');
+  assert.equal(h.document.querySelector('[data-loader="forge"]').querySelector('small').textContent,'安卓暂不可自动安装');
+  assert.ok(!h.requests.some(request=>request.action==='install'));
+});
+await test('loader labels include Fabric API and do not promise unsupported integrations', async () => {
+  const h=await harness();
+  assert.equal(h.document.querySelector('[data-loader="fabric"]').querySelector('small').textContent,'自动安装 Fabric API');
+  assert.ok(!html.includes('即将支持')); assert.ok(!app.includes('将在运行核心适配后开放'));
+  for (const id of ['vanilla','fabric','forge','liteloader','optifine']) assert.ok(app.includes(`data-download-loader="${id}"`));
+});
 await test('offline name validation and native request', async () => {
   const h=await harness(); h.get('offline-name').value='!bad'; await h.get('save-offline').dispatch('click');
   assert.ok(!h.requests.some(request=>request.action==='accounts.offline'));

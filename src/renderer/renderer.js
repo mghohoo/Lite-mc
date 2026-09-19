@@ -11,7 +11,27 @@ function setModel(next, persist = false) { model = next; document.querySelectorA
 function setAccount(next) { account = next; if (account) { model = account.variant === 'SLIM' ? 'SLIM' : 'CLASSIC'; loadSkin(account.skinUrl); } else loadSkin(null); $('login').textContent = account ? '退出 Microsoft 帐号' : '登录 Microsoft 帐号'; profileUI(); setModel(model); }
 const targetKey = () => `${$('loader').value}:${$('version').value}`;
 const loaderNames = { vanilla: '原版', fabric: 'Fabric + API', forge: 'Forge', liteloader: 'LiteLoader', optifine: 'OptiFine' };
-function updateVersionState() { const loader = $('loader').value; const installed = installedTargets.has(targetKey()); const loaderName = loaderNames[loader] || loader; $('versionState').textContent = installed ? `${loaderName} 已安装` : `${loaderName} 尚未安装`; $('installVersion').textContent = installed ? '已安装' : `下载 ${loaderName}`; $('installVersion').disabled = busy || installed; $('launch').disabled = busy || !installed; $('searchMods').disabled = busy || !['fabric', 'forge'].includes(loader); }
+let loaderCapabilities = [], capabilityVersion = '', capabilityRequest = 0;
+async function refreshLoaderCapabilities() {
+  const version = $('version').value, request = ++capabilityRequest;
+  try {
+    const items = await window.liteMC.getLoaders(version);
+    if (request !== capabilityRequest) return;
+    loaderCapabilities = items; capabilityVersion = version; updateVersionState();
+  } catch (error) { log(`加载器状态不可用：${error.message}`, 'warn'); }
+}
+function updateVersionState() {
+  const loader = $('loader').value, version = $('version').value;
+  const installed = installedTargets.has(targetKey()), loaderName = loaderNames[loader] || loader;
+  const capability = capabilityVersion === version ? loaderCapabilities.find(item => item.id === loader) : null;
+  const supported = capability?.automaticInstall === true;
+  $('versionState').textContent = capability && !supported ? capability.reason : installed ? `${loaderName} 已安装` : `${loaderName} ${capability ? '尚未安装' : '正在检查支持状态…'}`;
+  $('installVersion').textContent = installed ? '检查 / 修复安装' : `下载 ${loaderName}`;
+  $('installVersion').disabled = busy || !supported;
+  $('launch').disabled = busy || !installed || !supported;
+  $('searchMods').disabled = busy || !supported || !['fabric', 'forge'].includes(loader);
+  if (capabilityVersion !== version) { capabilityVersion = version; loaderCapabilities = []; refreshLoaderCapabilities(); }
+}
 function drawSkin() { const c = $('skinPreview'), x = c.getContext('2d'); x.clearRect(0, 0, 160, 190); const t = performance.now() / 1000; if (t > nextMove) { moveStrength = 1 + Math.random() * 2.5; nextMove = t + 2.5 + Math.random() * 4; } const bob = Math.sin(t * 1.2) * .8; const swing = Math.sin(t * 1.2) * moveStrength; x.save(); x.translate(80, 15 + bob); x.imageSmoothingEnabled = false; const sourceArmW = model === 'SLIM' ? 3 : 4; const armW = model === 'SLIM' ? 11 : 14;
   const part = (sx, sy, sw, sh, dx, dy, dw, dh) => skinImage ? x.drawImage(skinImage, sx, sy, sw, sh, dx, dy, dw, dh) : (x.fillStyle = '#7ac49c', x.fillRect(dx, dy, dw, dh));
   part(8, 8, 8, 8, -20, 0, 40, 40); part(20, 20, 8, 12, -20, 40, 40, 60);

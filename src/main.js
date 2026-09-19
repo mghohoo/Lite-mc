@@ -162,17 +162,19 @@ async function downloadRuntimeFile(url, destination, expectedSha1, allowedHosts)
     if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
   }
 }
-async function ensureOfficialJava(versionId, configuredJava) {
+async function ensureOfficialJava(versionId, configuredJava, loader = 'vanilla') {
   const versionJsonPath = path.join(gameRoot(), 'versions', versionId, `${versionId}.json`);
   const versionJson = JSON.parse(fs.readFileSync(versionJsonPath, 'utf8'));
   const required = Number(versionJson.javaVersion?.majorVersion || 8);
+  // Older Forge/ModLauncher releases are not forward-compatible with every JDK.
+  const compatible = major => loader === 'forge' ? major === required : major >= required;
   const configuredMajor = await javaMajor(configuredJava);
-  if (configuredMajor >= required) return configuredJava;
-  const component = versionJson.javaVersion?.component;
+  if (compatible(configuredMajor)) return configuredJava;
+  const component = versionJson.javaVersion?.component || (required === 8 ? 'jre-legacy' : null);
   if (!component) throw new Error(`该版本需要 Java ${required}，当前 Java 为 ${configuredMajor || '未知版本'}。请在设置中选择兼容的 java.exe。`);
   const runtimeRoot = path.join(gameRoot(), 'runtime', component, 'windows-x64', component);
   const javaExe = path.join(runtimeRoot, 'bin', 'java.exe');
-  if (await javaMajor(javaExe) >= required) return javaExe;
+  if (compatible(await javaMajor(javaExe))) return javaExe;
   send('status', { running: true, text: `正在下载 Mojang 官方 Java ${required} 运行时…` });
   const runtimes = await getJson(JAVA_RUNTIME_INDEX);
   const runtime = runtimes['windows-x64']?.[component]?.[0];
@@ -194,7 +196,7 @@ async function ensureOfficialJava(versionId, configuredJava) {
   });
   await Promise.all(workers);
   const installedMajor = await javaMajor(javaExe);
-  if (installedMajor < required) throw new Error(`Java 运行时安装不完整：需要 Java ${required}，检测到 ${installedMajor || '未知'}。`);
+  if (!compatible(installedMajor)) throw new Error(`Java 运行时不兼容：需要 Java ${required}，检测到 ${installedMajor || '未知'}。`);
   send('log', { type: 'info', message: `已安装 Mojang 官方 Java ${installedMajor}：${javaExe}` });
   return javaExe;
 }
@@ -309,6 +311,15 @@ function assertAutomaticLoader(loader, version) {
   if (loader === 'optifine') throw new Error('OptiFine 自动安装暂不可用：官方未提供此启动器可验证的安装元数据。请从 https://optifine.net/downloads 获取官方安装器；此操作不会被标记为已安装。');
   if (loader === 'forge' && (!/^1\.\d+(?:\.\d+)?$/.test(version) || Number(version.split('.')[1]) < 13)) throw new Error('当前 Forge 自动安装支持 Minecraft 1.13 及之后的 1.x 正式版；旧版 / 新版本号需要单独适配安装器，暂不标记为可安装。');
 }
+ipcMain.handle('loaders:get', (_, input = {}) => {
+  const version = String(input.version || '');
+  if (!/^[A-Za-z0-9._-]{1,40}$/.test(version)) throw new Error('游戏版本无效。');
+  return Object.entries(LOADER_NAMES).map(([id, name]) => {
+    let reason = '';
+    try { assertAutomaticLoader(id, version); } catch (error) { reason = error.message; }
+    return { id, name, automaticInstall: !reason, supported: !reason, status: reason ? 'unavailable' : 'supported', reason, includesFabricApi: id === 'fabric' };
+  });
+});
 function forgeJvmArgs(profile) {
   const substitutions = { library_directory: path.join(gameRoot(), 'libraries'), classpath_separator: path.delimiter, version_name: profile.id };
   const result = [];
@@ -409,7 +420,7 @@ ipcMain.handle('version:install', async (_, input) => {
     assertAutomaticLoader(loader, release.id);
     send('status', { running: true, text: `正在下载 ${release.id} · ${LOADER_NAMES[loader]}…` });
     await installVanilla(release);
-    const installedJava = await ensureOfficialJava(release.id, readSettings().javaPath || 'java');
+    const installedJava = await ensureOfficialJava(release.id, readSettings().javaPath || 'java', loader);
     const previous = readInstallMetadata(release.id, loader);
     if (loader === 'fabric') {
       if (!previous.customId || !Array.isArray(previous.classes)) await installFabric(release);
@@ -426,8 +437,14 @@ ipcMain.handle('version:install', async (_, input) => {
         }
       }
     } else if (loader === 'forge') {
-      if (!previous.customId || !Array.isArray(previous.classes) || !Array.isArray(previous.jvmArgs)) await installForge(release, installedJava);
-      else verifyInstalledClasses(previous.classes);
+      let complete = Boolean(previous.customId && Array.isArray(previous.classes) && Array.isArray(previous.jvmArgs));
+      if (complete) {
+        try {
+          verifyInstalledClasses(previous.classes);
+          complete = fs.existsSync(path.join(gameRoot(), 'versions', previous.customId, `${previous.customId}.json`));
+        } catch { complete = false; }
+      }
+      if (!complete) await installForge(release, installedJava);
     }
     const saved = readSettings();
     saveSettings({ ...saved, version: release.id, loader, javaPath: installedJava });
@@ -675,7 +692,7 @@ ipcMain.handle('launch', async (_, input) => {
   if (!fs.existsSync(installMarker(release.id, loader))) throw new Error(`请先下载 ${release.id} · ${LOADER_NAMES[loader]}。`);
   const supportedLanguages = new Set(['zh_cn', 'en_us', 'zh_tw', 'ja_jp']);
   const language = supportedLanguages.has(input.language) ? input.language : 'zh_cn';
-  const compatibleJava = await ensureOfficialJava(release.id, javaPath);
+  const compatibleJava = await ensureOfficialJava(release.id, javaPath, loader);
   const settings = { username, version: release.id, loader, memory, javaPath: compatibleJava, accountMode, language };
   saveSettings(settings);
   const playDirectory = instanceRoot(release.id, loader);
