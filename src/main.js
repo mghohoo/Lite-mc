@@ -756,6 +756,7 @@ ipcMain.handle('launch', async (_, input) => {
     // MCLC's implicit root while loader instances used an override, which
     // made 1.21.x options (especially lang) appear to be ignored.
     fastOverrides.gameDirectory = playDirectory;
+    fastOverrides.assetRoot = path.join(gameRoot(), 'assets');
     if (loader !== 'vanilla') {
       if (!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,119}$/.test(installMetadata.customId || '')) throw new Error(`${LOADER_NAMES[loader]} 安装信息损坏，请重新下载该版本。`);
       verifyInstalledClasses(installMetadata.classes);
