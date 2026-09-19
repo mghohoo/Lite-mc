@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('liteMC', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  setLanguage: language => ipcRenderer.invoke('settings:set-language', language),
   getVersions: value => ipcRenderer.invoke('versions:get', value),
   getLoaders: version => ipcRenderer.invoke('loaders:get', { version }),
   installVersion: value => ipcRenderer.invoke('version:install', value),

@@ -25,6 +25,7 @@ const curseForgeKeyPath = () => path.join(app.getPath('userData'), 'lite-mc-curs
 const gameRoot = () => path.join(app.getPath('userData'), 'minecraft');
 const versionManifestCachePath = () => path.join(gameRoot(), 'cache', 'lite-mc-version-manifest-v2.json');
 const LOADER_NAMES = Object.freeze({ vanilla: '原版', fabric: 'Fabric', forge: 'Forge', liteloader: 'LiteLoader', optifine: 'OptiFine' });
+const SUPPORTED_LANGUAGES = new Set(['zh_cn', 'en_us', 'zh_tw', 'ja_jp']);
 function normalizeLoader(value = 'vanilla') {
   if (!Object.hasOwn(LOADER_NAMES, value)) throw new Error('未知加载器，请重新选择。');
   return value;
@@ -99,15 +100,17 @@ function loadCurseForgeKey() {
   try { return safeStorage.decryptString(fs.readFileSync(curseForgeKeyPath())); } catch { return ''; }
 }
 function applyGameLanguage(language, directory = gameRoot()) {
+  if (!SUPPORTED_LANGUAGES.has(language)) language = 'zh_cn';
   const optionsPath = path.join(directory, 'options.txt');
   let content = '';
   try { content = fs.readFileSync(optionsPath, 'utf8'); } catch {}
   const lines = content ? content.replace(/\r/g, '').split('\n').filter(Boolean) : [];
-  const index = lines.findIndex(line => line.startsWith('lang:'));
-  if (index >= 0) lines[index] = `lang:${language}`;
-  else lines.push(`lang:${language}`);
+  const withoutLanguage = lines.filter(line => !/^lang:/i.test(line));
+  withoutLanguage.push(`lang:${language}`);
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(optionsPath, `${lines.join('\n')}\n`, 'utf8');
+  const temporary = `${optionsPath}.lite-mc.tmp`;
+  fs.writeFileSync(temporary, `${withoutLanguage.join('\n')}\n`, 'utf8');
+  fs.renameSync(temporary, optionsPath);
 }
 function send(channel, value) { windowRef?.webContents.send(channel, value); }
 function redactLog(value) {
@@ -211,6 +214,16 @@ app.whenReady().then(() => { createWindow(); app.on('activate', () => { if (!Bro
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 ipcMain.handle('settings:get', () => ({ ...readSettings(), gameRoot: gameRoot() }));
+ipcMain.handle('settings:set-language', (_, language) => {
+  const next = SUPPORTED_LANGUAGES.has(language) ? language : 'zh_cn';
+  const settings = readSettings();
+  saveSettings({ ...settings, language: next });
+  const version = String(settings.version || '');
+  const loader = Object.hasOwn(LOADER_NAMES, settings.loader) ? settings.loader : 'vanilla';
+  if (/^[A-Za-z0-9._-]{1,40}$/.test(version) && version !== 'latest-release') applyGameLanguage(next, instanceRoot(version, loader));
+  else applyGameLanguage(next, gameRoot());
+  return next;
+});
 ipcMain.handle('versions:get', async (_, input = {}) => {
   // Offline starts must remain offline.  Once a manifest was fetched, it is
   // enough to populate the selector without putting startup on the network.
@@ -690,8 +703,7 @@ ipcMain.handle('launch', async (_, input) => {
   assertAutomaticLoader(loader, String(input.version || ''));
   const release = await validatedRelease(input.version);
   if (!fs.existsSync(installMarker(release.id, loader))) throw new Error(`请先下载 ${release.id} · ${LOADER_NAMES[loader]}。`);
-  const supportedLanguages = new Set(['zh_cn', 'en_us', 'zh_tw', 'ja_jp']);
-  const language = supportedLanguages.has(input.language) ? input.language : 'zh_cn';
+  const language = SUPPORTED_LANGUAGES.has(input.language) ? input.language : 'zh_cn';
   const compatibleJava = await ensureOfficialJava(release.id, javaPath, loader);
   const settings = { username, version: release.id, loader, memory, javaPath: compatibleJava, accountMode, language };
   saveSettings(settings);

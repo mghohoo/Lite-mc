@@ -13,3 +13,7 @@
 .mod-info{font:10px "Microsoft YaHei",system-ui,sans-serif}
 .empty-mods b{font:11px "Microsoft YaHei",system-ui,sans-serif;letter-spacing:0}
 .empty-mods span{font-size:11px}
+/* 主页背景使用相对资源并提供纯 CSS 兜底，打包到 app.asar 后也不会露白。 */
+.hero { background: #071019 url('assets/lite-mc-neon.png') center / cover no-repeat !important; }
+.hero > img { display: block; }
+.hero > img[alt] { min-width: 1px; min-height: 1px; }
