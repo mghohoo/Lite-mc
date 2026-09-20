@@ -188,6 +188,30 @@ await test('offline name validation and native request', async () => {
 await test('launch disabled with no installed instance or unready runtime', async () => {
   for (const fixture of [{instances:[],selected:''},{ready:false}]) { const h=await harness(fixture); assert.equal(h.get('launch').disabled,true); }
 });
+await test('existing 26.x instance stays visible but cannot launch or select', async () => {
+  const h=await harness({instances:[{id:'vanilla-26.3-old',version:'26.3',loader:'vanilla'}],selected:'vanilla-26.3-old'});
+  assert.equal(h.get('launch').disabled,true); assert.equal(h.get('compatibility-warning').hidden,false);
+  assert.ok(h.get('compatibility-warning').textContent.includes('1.21.x'));
+  assert.ok(h.get('instance-list').textContent.includes('26.3'));
+  assert.equal(h.get('instance-list').querySelector('button').disabled,true);
+  await h.get('launch').onclick(); await settle();
+  assert.ok(!h.requests.some(request=>request.action==='launch'));
+});
+await test('catalog disables 26.x, prefers 1.21.x and rejects programmatic installation', async () => {
+  const h=await harness(); h.responses.catalog=()=>({items:[{id:'26.3',date:'2026-09-01',supported:false,reason:'26.x incompatible; choose 1.21.x'},{id:'1.21.11',date:'2025-12-01'},{id:'1.20.1',date:'2023-06-12'}]});
+  await h.run('catalog(false)'); await settle();
+  assert.equal(h.get('version-select').value,'1.21.11');
+  assert.equal(h.get('version-select').children.find(item=>item.value==='26.3').disabled,true);
+  h.get('version-select').value='26.3'; await h.get('version-select').dispatch('change');
+  assert.equal(h.get('install').disabled,true);
+  await h.get('install').onclick(); await settle();
+  assert.ok(!h.requests.some(request=>request.action==='install'));
+  assert.equal(h.get('install').disabled,true);
+});
+await test('catalog containing only incompatible versions leaves install disabled', async () => {
+  const h=await harness(); h.responses.catalog=()=>({items:[{id:'26.3',date:'2026-09-01'}]});
+  await h.run('catalog(false)'); assert.equal(h.get('version-select').value,'');assert.equal(h.get('install').disabled,true);
+});
 await test('Mod search renders untrusted content as text and installs to selected instance', async () => {
   const h=await harness(); h.get('mod-query').value='test'; await h.get('mod-search').dispatch('click'); await settle();
   assert.ok(h.get('mod-results').textContent.includes('<img onerror=attack()>'));
@@ -217,7 +241,7 @@ await test('controls JSON includes joystick, keyboard, jump, attack, use and pau
   assert.equal(controls.version,8); assert.ok(controls.mJoystickDataList.length>0);
   const buttons=controls.mControlDataList;
   for (const code of [32,-3,-4,69,256,-9,341,84]) assert.ok(buttons.some(button=>button.keycodes.includes(code)),`Missing key ${code}`);
-  assert.ok(!buttons.some(button=>button.keycodes.includes(-1)),'Desktop keyboard shortcut must not be in the mobile layout');
+  assert.ok(buttons.some(button=>button.keycodes.includes(-1)),'Mobile layout must include a dedicated IME keyboard button');
   for (const button of [...buttons,...controls.mJoystickDataList]) { assert.ok(button.width>0&&button.height>0); assert.equal(button.keycodes.length,4); assert.equal(typeof button.dynamicX,'string'); assert.equal(typeof button.dynamicY,'string'); }
 });
 await test('remote UI requests are intercepted with a blocking fallback', () => {
