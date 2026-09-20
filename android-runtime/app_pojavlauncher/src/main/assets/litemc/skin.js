@@ -17,7 +17,9 @@
   }
   function part(c,x,y,w,h,uv,layer,angle=0) {
     c.save(); c.translate(x+w/2,y); c.rotate(angle); x=-w/2;
-    c.fillStyle='#162328'; c.fillRect(x+2,2,w,h);
+    // Keep a one-pixel silhouette behind each part without shifting the skin
+    // UV. The old x+2 fill ate most of a 3px Alex arm and made it look broken.
+    c.fillStyle='#162328'; c.fillRect(x-.18,.18,w+.36,h+.36);
     rectangle(c,uv,x,0,w,h,false);
     c.fillStyle='rgba(0,0,0,.09)'; c.fillRect(x+w-2,0,2,h);
     if (texture.height===64 || layer[1]<16) rectangle(c,layer,x-.4,-.4,w+.8,h+.8,true);

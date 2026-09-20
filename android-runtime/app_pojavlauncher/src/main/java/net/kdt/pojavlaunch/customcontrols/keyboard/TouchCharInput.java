@@ -45,7 +45,10 @@ public class TouchCharInput extends androidx.appcompat.widget.AppCompatEditText 
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
-        disable();
+        // Losing focus means Android is switching away from the game. The
+        // previous code also disabled on focus=true, which immediately hid
+        // the IME after the player tapped the chat/command input button.
+        if (!hasWindowFocus) disable();
     }
 
     /**
@@ -103,6 +106,10 @@ public class TouchCharInput extends androidx.appcompat.widget.AppCompatEditText 
         setFocusable(true);
         setVisibility(VISIBLE);
         requestFocus();
+        post(() -> {
+            InputMethodManager manager = (InputMethodManager) getContext().getSystemService(INPUT_METHOD_SERVICE);
+            if (manager != null) manager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
+        });
     }
 
     /** Lose ability to exist, take focus and have some text being input */

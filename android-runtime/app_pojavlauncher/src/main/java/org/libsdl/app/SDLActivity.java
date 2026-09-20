@@ -389,6 +389,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if (mTextEdit == null) return;
 
         mTextEdit.setInputType(TYPE_CLASS_TEXT | TYPE_TEXT_VARIATION_NORMAL);
+        // disableSDLEditKeyboard() shrinks the editor to zero so it does not
+        // cover the game. Restore a real, focusable editor before showing the
+        // IME again; otherwise Android accepts the keyboard request but sends
+        // no text to Minecraft on the next chat/command attempt.
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(1, 1);
+        params.leftMargin = 0;
+        params.topMargin = 0;
+        mTextEdit.setLayoutParams(params);
 
         mTextEdit.setVisibility(View.VISIBLE);
         mTextEdit.requestFocus();
