@@ -12,7 +12,8 @@
     {"name":"背包","width":72,"height":40,"dynamicX":"${screen_width} - ${width} - px(24)","dynamicY":"px(18)","keycodes":[69,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
     {"name":"暂停","width":60,"height":40,"dynamicX":"px(22)","dynamicY":"px(18)","keycodes":[256,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
     {"name":"菜单","width":56,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2","dynamicY":"px(18)","keycodes":[-9,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
-    {"name":"文字输入","width":72,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2 - px(78)","dynamicY":"px(18)","keycodes":[84,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"聊天输入","width":84,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2 - px(86)","dynamicY":"px(18)","keycodes":[-12,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
+    {"name":"文字输入","width":72,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2 - px(78)","dynamicY":"px(66)","keycodes":[84,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true},
     {"name":"键盘","width":72,"height":40,"dynamicX":"${screen_width} / 2 - ${width} / 2 + px(78)","dynamicY":"px(18)","keycodes":[-1,0,0,0],"bgColor":1431122261,"strokeColor":-7540028,"strokeWidth":1,"cornerRadius":16,"opacity":0.85,"displayInGame":true,"displayInMenu":true}
   ]
 }

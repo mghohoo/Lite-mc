@@ -8,6 +8,8 @@ import android.annotation.SuppressLint;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -207,6 +209,20 @@ public class ControlButton extends TextView implements ControlInterface {
         switch (keycode) {
             case ControlData.SPECIALBTN_KEYBOARD:
                 if(isDown) MainActivity.switchKeyboardState();
+                break;
+
+            case ControlData.SPECIALBTN_CHAT_KEYBOARD:
+                if (isDown) {
+                    // A single mobile button should be enough to start typing:
+                    // open Minecraft chat first, then give its text editor to
+                    // the Android IME after the screen has been created.
+                    if (MainActivity.touchCharInput == null || !MainActivity.touchCharInput.isEnabled()) {
+                        sendKeyPress(LwjglGlfwKeycode.GLFW_KEY_T);
+                        new Handler(Looper.getMainLooper()).postDelayed(MainActivity::switchKeyboardState, 180L);
+                    } else {
+                        MainActivity.switchKeyboardState();
+                    }
+                }
                 break;
 
             case ControlData.SPECIALBTN_TOGGLECTRL:

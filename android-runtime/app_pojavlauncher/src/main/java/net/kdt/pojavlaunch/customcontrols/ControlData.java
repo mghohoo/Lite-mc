@@ -35,6 +35,8 @@ public class ControlData {
     public static final int SPECIALBTN_MENU = -9;
     public static final int SPECIALBTN_MOUSEBCK = -10;
     public static final int SPECIALBTN_MOUSEFWD = -11;
+    /** Open Minecraft chat and then focus the Android IME in one tap. */
+    public static final int SPECIALBTN_CHAT_KEYBOARD = -12;
 
     private static ControlData[] SPECIAL_BUTTONS;
     private static List<String> SPECIAL_BUTTON_NAME_ARRAY;
