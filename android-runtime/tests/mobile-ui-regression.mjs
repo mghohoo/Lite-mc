@@ -240,7 +240,7 @@ await test('touch size is included in native state response', () => {
 await test('controls JSON includes joystick, keyboard, jump, attack, use and pause', () => {
   assert.equal(controls.version,8); assert.ok(controls.mJoystickDataList.length>0);
   const buttons=controls.mControlDataList;
-  for (const code of [32,-3,-4,69,256,-9,341,84]) assert.ok(buttons.some(button=>button.keycodes.includes(code)),`Missing key ${code}`);
+  for (const code of [32,-3,-4,69,256,-9,341,84,-12]) assert.ok(buttons.some(button=>button.keycodes.includes(code)),`Missing key ${code}`);
   assert.ok(buttons.some(button=>button.keycodes.includes(-1)),'Mobile layout must include a dedicated IME keyboard button');
   for (const button of [...buttons,...controls.mJoystickDataList]) { assert.ok(button.width>0&&button.height>0); assert.equal(button.keycodes.length,4); assert.equal(typeof button.dynamicX,'string'); assert.equal(typeof button.dynamicY,'string'); }
 });
