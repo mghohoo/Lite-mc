@@ -96,10 +96,22 @@ public final class LiteVersions {
     if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
   }
 
-  private static JSONObject withCompatibility(JSONObject item, String version) throws Exception {
-    String reason = compatibilityReason(version);
+  private JSONObject withCompatibility(JSONObject item, String version) throws Exception {
+    String reason = compatibilityReasonForDevice(version);
     return item.put("supported", reason.isEmpty()).put("reason", reason)
         .put("recommendedVersion", reason.isEmpty() ? "" : "1.21.x");
+  }
+
+  private String compatibilityReasonForDevice(String version) {
+    try {
+      Object resources = context.getClass().getMethod("getResources").invoke(context);
+      Object configuration = resources.getClass().getMethod("getConfiguration").invoke(resources);
+      int smallest = configuration.getClass().getField("smallestScreenWidthDp").getInt(configuration);
+      if (smallest >= 600) return "";
+    } catch (Exception ignored) {
+      // Test/runtime shims without Android Resources use the conservative guard.
+    }
+    return compatibilityReason(version);
   }
 
   public static File instance(String instanceId) throws IOException {
@@ -217,7 +229,8 @@ public final class LiteVersions {
   }
 
   public void select(JSONObject instance) throws Exception {
-    requireCompatibleVersion(instance.getString("version"));
+    String reason = compatibilityReasonForDevice(instance.getString("version"));
+    if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
     requireAutomaticLoader(instance.getString("loader"));
     String instanceId = id(instance.getString("id"));
     String profileId =
@@ -243,7 +256,8 @@ public final class LiteVersions {
 
   public JSONObject install(Activity activity, String version, String loader, String displayName) throws Exception {
     id(version);
-    requireCompatibleVersion(version);
+    String reason = compatibilityReasonForDevice(version);
+    if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
     requireAutomaticLoader(loader);
     catalog(false);
     JSONObject metadata = null;

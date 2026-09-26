@@ -275,6 +275,10 @@ public final class LiteActivity extends Activity {
           preferences.getBoolean("motion", true),
           "model",
           preferences.getString("model", "classic"),
+          "performanceMode",
+          preferences.getString("performanceMode", LauncherPreferences.PREF_SUSTAINED_PERFORMANCE ? "performance" : "balanced"),
+          "android26Supported",
+          isTabletRuntime(),
           "controlScale",
           LauncherPreferences.DEFAULT_PREF.getInt("buttonscale", 100));
     if (action.equals("skin.read")) {
@@ -340,11 +344,14 @@ public final class LiteActivity extends Activity {
           .putString("language", language)
           .putBoolean("motion", args.optBoolean("motion", true))
           .putString("model", args.optString("model", "classic"))
+          .putString("performanceMode", normalizePerformanceMode(args.optString("performanceMode", "balanced")))
           .apply();
+      String performanceMode = normalizePerformanceMode(args.optString("performanceMode", "balanced"));
       LauncherPreferences.DEFAULT_PREF
           .edit()
           .putInt("allocation", memory)
           .putInt("buttonscale", Math.max(60, Math.min(150, args.optInt("controlScale", 100))))
+          .putBoolean("sustainedPerformance", "performance".equals(performanceMode))
           .apply();
       LauncherPreferences.loadPreferences(this);
       return object("saved", true);
@@ -404,6 +411,15 @@ public final class LiteActivity extends Activity {
       return object("started", true);
     }
     throw new IllegalArgumentException("Unsupported action");
+  }
+
+  private static String normalizePerformanceMode(String value) {
+    if ("performance".equals(value) || "powersave".equals(value)) return value;
+    return "balanced";
+  }
+
+  private boolean isTabletRuntime() {
+    return getResources().getConfiguration().smallestScreenWidthDp >= 600;
   }
 
   @Override

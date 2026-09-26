@@ -3,6 +3,8 @@ package com.litemc.launcher;
 import android.content.Context;
 import android.util.AtomicFile;
 import java.io.File;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.net.URLEncoder;
@@ -13,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import javax.crypto.Cipher;
 import net.kdt.pojavlaunch.Tools;
 import org.json.JSONArray;
@@ -56,16 +60,19 @@ public final class LiteMods {
 
   private JSONObject search(JSONObject a) throws Exception {
     String provider = provider(a), version = version(a), loader = a.optString("loader", "");
-    requireModLoader(loader);
+    String kind = kind(a);
+    if ("mod".equals(kind)) requireModLoader(loader);
     String query = a.optString("query", "").trim();
     if (query.length() == 0 || query.length() > 80)
       throw new IllegalArgumentException("请输入 1–80 个字符的 Mod 名称。");
     JSONArray items = new JSONArray();
     if ("modrinth".equals(provider)) {
+      String projectType = "mod".equals(kind) ? "mod" : kind;
+      String facet = "[[\"project_type:" + projectType + "\"],[\"versions:" + version + "\"]";
+      if ("mod".equals(kind)) facet += ",[\"categories:" + loader + "\"]";
+      facet += "]";
       String facets =
-          java.net.URLEncoder.encode(
-              "[[\"project_type:mod\"],[\"versions:" + version + "\"],[\"categories:" + loader + "\"]]",
-              "UTF-8");
+          java.net.URLEncoder.encode(facet, "UTF-8");
       JSONObject response =
           LiteNetwork.getJson(
               "https://api.modrinth.com/v2/search?query="
@@ -83,16 +90,18 @@ public final class LiteMods {
                   h.optString("project_id"),
                   h.optString("title"),
                   h.optString("description"),
-                  h.optLong("downloads")));
+                  h.optLong("downloads"), h.optString("icon_url"), h.optString("page_url"),
+                  h.optString("author"), provider, kind));
         }
     } else {
       String key = key();
       Map<String, String> headers = new HashMap<String, String>();
       headers.put("x-api-key", key);
       String u =
-          "https://api.curseforge.com/v1/mods/search?gameId=432&classId=6&gameVersion="
+          "https://api.curseforge.com/v1/mods/search?gameId=432&classId=" + curseClass(kind) + "&gameVersion="
               + URLEncoder.encode(version, "UTF-8")
-              + "&modLoaderType=" + ("forge".equals(loader) ? "1" : "4") + "&pageSize=20&searchFilter="
+              + ("mod".equals(kind) ? "&modLoaderType=" + ("forge".equals(loader) ? "1" : "4") : "")
+              + "&pageSize=20&searchFilter="
               + URLEncoder.encode(query, "UTF-8");
       JSONArray data = LiteNetwork.getJson(u, CURSE, headers).optJSONArray("data");
       if (data != null)
@@ -103,7 +112,10 @@ public final class LiteMods {
                   String.valueOf(h.optLong("id")),
                   h.optString("name"),
                   h.optString("summary"),
-                  h.optLong("downloadCount")));
+                  h.optLong("downloadCount"), h.optJSONObject("logo") == null ? "" : h.optJSONObject("logo").optString("url"),
+                  h.optJSONObject("links") == null ? "" : h.optJSONObject("links").optString("websiteUrl"),
+                  h.optJSONArray("authors") != null && h.optJSONArray("authors").length() > 0 ? h.optJSONArray("authors").optJSONObject(0).optString("name") : "",
+                  provider, kind));
         }
     }
     return new JSONObject().put("items", items);
@@ -111,11 +123,33 @@ public final class LiteMods {
 
   private JSONObject install(JSONObject a) throws Exception {
     String provider = provider(a), version = version(a), loader = a.optString("loader", "");
-    requireModLoader(loader);
+    String kind = kind(a);
+    if ("mod".equals(kind)) requireModLoader(loader);
     String project = a.optString("projectId", "");
     if (!project.matches("[A-Za-z0-9_-]{1,100}"))
       throw new IllegalArgumentException("Mod 项目 ID 无效。");
-    File mods = modsDirectory(a.optString("instanceId", ""));
+    File instance = instanceDirectory(a.optString("instanceId", ""));
+    if (!"mod".equals(kind)) {
+      FileInfo pack = "modrinth".equals(provider)
+          ? resolveProjectFile(project, version, loader, kind)
+          : resolveCurseGeneric(project, version, kind);
+      File destination;
+      if ("resourcepack".equals(kind)) {
+        File dir = child(instance, "resourcepacks");
+        if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("无法创建资源包文件夹。");
+        destination = child(dir, pack.name);
+        if (!matchesHash(destination, pack.sha1)) LiteNetwork.download(pack.url, pack.hosts, destination, pack.sha1);
+      } else {
+        File temp = child(instance, ".litemc-" + pack.name + ".part");
+        if (!matchesHash(temp, pack.sha1)) LiteNetwork.download(pack.url, pack.hosts, temp, pack.sha1);
+        installArchive(temp, instance);
+        temp.delete();
+        destination = temp;
+      }
+      return new JSONObject().put("installed", new JSONArray().put(pack.name)).put("kind", kind);
+    }
+    File mods = child(instance, "mods");
+    if (!mods.exists() && !mods.mkdirs()) throw new java.io.IOException("无法创建 Mods 文件夹。");
     ArrayList<FileInfo> files = new ArrayList<FileInfo>();
     if ("modrinth".equals(provider))
       resolveModrinth(project, "", version, loader, 0, new HashSet<String>(), files);
@@ -283,13 +317,16 @@ public final class LiteMods {
   }
 
   private File modsDirectory(String id) throws Exception {
+    File mods = child(instanceDirectory(id), "mods");
+    if (!mods.exists() && !mods.mkdirs()) throw new java.io.IOException("无法创建 Mods 文件夹。");
+    return mods;
+  }
+
+  private File instanceDirectory(String id) throws Exception {
     if (!id.matches("[A-Za-z0-9._-]{1,100}") || id.contains(".."))
       throw new IllegalArgumentException("实例 ID 无效。");
     File root = new File(Tools.DIR_GAME_NEW, "lite-instances").getCanonicalFile();
-    File instance = child(root, id);
-    File mods = child(instance, "mods");
-    if (!mods.exists() && !mods.mkdirs()) throw new java.io.IOException("无法创建 Mods 文件夹。");
-    return mods;
+    return child(root, id);
   }
 
   private static File child(File parent, String name) throws Exception {
@@ -306,19 +343,136 @@ public final class LiteMods {
     files.add(file);
   }
 
+  private FileInfo resolveProjectFile(String id, String version, String loader, String kind) throws Exception {
+    String url = "https://api.modrinth.com/v2/project/" + URLEncoder.encode(id, "UTF-8") + "/version?game_versions="
+        + URLEncoder.encode("[\"" + version + "\"]", "UTF-8");
+    if ("mod".equals(kind)) url += "&loaders=" + URLEncoder.encode("[\"" + loader + "\"]", "UTF-8");
+    JSONArray versions = new JSONArray(new String(LiteNetwork.request("GET", url, MODRINTH, null, null), UTF8));
+    JSONObject chosen = null;
+    for (int i = 0; i < versions.length(); i++) {
+      JSONObject candidate = versions.getJSONObject(i);
+      if (!arrayContains(candidate.optJSONArray("game_versions"), version)) continue;
+      if ("mod".equals(kind) && !arrayContains(candidate.optJSONArray("loaders"), loader)) continue;
+      if (chosen == null || (!"release".equals(chosen.optString("version_type")) && "release".equals(candidate.optString("version_type")))) chosen = candidate;
+    }
+    if (chosen == null) throw new IllegalStateException("该项目没有兼容 Minecraft " + version + " 的文件。");
+    JSONArray fs = chosen.optJSONArray("files");
+    JSONObject selected = null;
+    if (fs != null) for (int i = 0; i < fs.length(); i++) {
+      JSONObject f = fs.getJSONObject(i);
+      String filename = f.optString("filename", "");
+      if (selected == null || f.optBoolean("primary") || ("modpack".equals(kind) && filename.endsWith(".mrpack"))) selected = f;
+    }
+    if (selected == null) throw new IllegalStateException("项目文件元数据不完整。");
+    String sha = selected.optJSONObject("hashes") == null ? "" : selected.optJSONObject("hashes").optString("sha1", "");
+    if (!sha.matches("(?i)[0-9a-f]{40}")) throw new IllegalStateException("项目文件缺少官方 SHA-1 校验值。");
+    return new FileInfo(safeArchiveName(selected.optString("filename")), selected.getString("url"), sha,
+        new String[] {"cdn.modrinth.com"}, id, chosen.optString("id"));
+  }
+
+  private FileInfo resolveCurseGeneric(String id, String version, String kind) throws Exception {
+    if (!id.matches("[0-9]{1,20}")) throw new IllegalArgumentException("CurseForge 项目 ID 无效。");
+    Map<String, String> headers = new HashMap<String, String>();
+    headers.put("x-api-key", key());
+    JSONArray data = LiteNetwork.getJson("https://api.curseforge.com/v1/mods/" + id + "/files?gameVersion="
+        + URLEncoder.encode(version, "UTF-8") + "&pageSize=50", CURSE, headers).optJSONArray("data");
+    JSONObject chosen = null;
+    if (data != null) for (int i = 0; i < data.length(); i++) {
+      JSONObject f = data.getJSONObject(i);
+      if (!f.optBoolean("isAvailable", true)) continue;
+      if (chosen == null || f.optString("fileDate").compareTo(chosen.optString("fileDate")) > 0) chosen = f;
+    }
+    if (chosen == null) throw new IllegalStateException("该项目没有兼容 Minecraft " + version + " 的文件。");
+    String download = chosen.optString("downloadUrl", "");
+    if (download.length() == 0) {
+      download = LiteNetwork.getJson("https://api.curseforge.com/v1/mods/" + id + "/files/" + chosen.getLong("id") + "/download-url", CURSE, headers).optString("data", "");
+    }
+    String sha = ""; JSONArray hashes = chosen.optJSONArray("hashes");
+    if (hashes != null) for (int i = 0; i < hashes.length(); i++) if (hashes.getJSONObject(i).optInt("algo") == 1) { sha = hashes.getJSONObject(i).optString("value", ""); break; }
+    if (download.length() == 0 || !sha.matches("(?i)[0-9a-f]{40}")) throw new IllegalStateException("项目文件不允许安全下载。");
+    return new FileInfo(safeArchiveName(chosen.optString("fileName")), download, sha,
+        new String[] {"forgecdn.net", "curseforge.com"}, id, String.valueOf(chosen.getLong("id")));
+  }
+
+  private static int curseClass(String kind) {
+    if ("resourcepack".equals(kind)) return 12;
+    if ("modpack".equals(kind)) return 4471;
+    return 6;
+  }
+
+  private static String kind(JSONObject a) {
+    String value = a.optString("kind", "mod");
+    if (!"mod".equals(value) && !"modpack".equals(value) && !"resourcepack".equals(value))
+      throw new IllegalArgumentException("资源类型无效。");
+    return value;
+  }
+
+  private static String safeArchiveName(String name) {
+    if (name == null || !name.matches("[A-Za-z0-9._+() -]{1,180}\\.(zip|mrpack|jar|mcpack|mcmeta)"))
+      throw new IllegalArgumentException("下载目标不是有效资源文件。");
+    return name;
+  }
+
+  private static void installArchive(File archive, File instance) throws Exception {
+    byte[] buffer = new byte[32768];
+    ByteArrayOutputStream modrinthManifest = new ByteArrayOutputStream();
+    ZipInputStream input = new ZipInputStream(new BufferedInputStream(new FileInputStream(archive)));
+    try {
+      for (ZipEntry entry; (entry = input.getNextEntry()) != null;) {
+        String name = entry.getName().replace('\\', '/');
+        if (name.startsWith("/") || name.contains("../") || name.equals("..")) throw new SecurityException("整合包包含无效路径。");
+        // Modrinth packs keep playable files under overrides; retain the index in memory so
+        // the official files can be fetched after the archive is unpacked.
+        if (name.equals("modrinth.index.json")) {
+          for (int n; (n = input.read(buffer)) != -1;) modrinthManifest.write(buffer, 0, n);
+          continue;
+        }
+        if (name.equals("manifest.json") || name.startsWith(".")) continue;
+        if (name.startsWith("overrides/")) name = name.substring("overrides/".length());
+        if (name.length() == 0) continue;
+        File target = child(instance, name);
+        if (entry.isDirectory()) { if (!target.exists() && !target.mkdirs()) throw new java.io.IOException("无法创建整合包目录。"); }
+        else {
+          File parent = target.getParentFile(); if (parent != null && !parent.exists() && !parent.mkdirs()) throw new java.io.IOException("无法创建整合包目录。");
+          FileOutputStream output = new FileOutputStream(target);
+          try { for (int n; (n = input.read(buffer)) != -1;) output.write(buffer, 0, n); } finally { output.close(); }
+        }
+      }
+    } finally { input.close(); }
+    if (modrinthManifest.size() > 0) {
+      JSONObject index = new JSONObject(new String(modrinthManifest.toByteArray(), UTF8));
+      JSONArray files = index.optJSONArray("files");
+      if (files != null) for (int i = 0; i < files.length(); i++) {
+        JSONObject file = files.getJSONObject(i);
+        String path = file.optString("path", "").replace('\\', '/');
+        String download = file.optJSONArray("downloads") == null || file.optJSONArray("downloads").length() == 0 ? "" : file.optJSONArray("downloads").optString(0, "");
+        String sha = file.optJSONObject("hashes") == null ? "" : file.optJSONObject("hashes").optString("sha1", "");
+        if (path.length() == 0 || download.length() == 0 || !sha.matches("(?i)[0-9a-f]{40}") || path.startsWith("/") || path.contains("../")) throw new SecurityException("整合包索引包含无效文件。");
+        File target = child(instance, path);
+        if (!matchesHash(target, sha)) LiteNetwork.download(download, new String[] {"cdn.modrinth.com", "modrinth.com"}, target, sha);
+      }
+    }
+  }
+
   private static boolean arrayContains(JSONArray values, String target) {
     if (values == null) return false;
     for (int i = 0; i < values.length(); i++) if (target.equals(values.optString(i))) return true;
     return false;
   }
 
-  private static JSONObject item(String id, String title, String desc, long downloads)
+  private static JSONObject item(String id, String title, String desc, long downloads, String iconUrl,
+      String pageUrl, String author, String source, String kind)
       throws Exception {
     return new JSONObject()
         .put("id", id)
         .put("title", title)
         .put("description", desc)
-        .put("downloads", downloads);
+        .put("downloads", downloads)
+        .put("iconUrl", iconUrl)
+        .put("pageUrl", pageUrl)
+        .put("author", author)
+        .put("source", source)
+        .put("kind", kind);
   }
 
   private static String safeName(String name) {
