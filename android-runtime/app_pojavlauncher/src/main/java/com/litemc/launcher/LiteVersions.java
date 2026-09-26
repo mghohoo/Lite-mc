@@ -255,6 +255,16 @@ public final class LiteVersions {
   }
 
   public JSONObject install(Activity activity, String version, String loader, String displayName) throws Exception {
+    return install(activity, version, loader, displayName, "", null);
+  }
+
+  public interface InstallContent {
+    void prepare(File directory) throws Exception;
+  }
+
+  /** Packs pin the loader and supply their own mod set before the instance is committed. */
+  public JSONObject install(Activity activity, String version, String loader, String displayName,
+      String pinnedLoader, InstallContent content) throws Exception {
     id(version);
     String reason = compatibilityReasonForDevice(version);
     if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
@@ -282,13 +292,13 @@ public final class LiteVersions {
                   StandardCharsets.UTF_8));
       for (int i = 0; i < loaders.length(); i++) {
         JSONObject entry = loaders.getJSONObject(i).getJSONObject("loader");
-        if (entry.optBoolean("stable")) {
+        if (pinnedLoader.isEmpty() ? entry.optBoolean("stable") : pinnedLoader.equals(entry.optString("version"))) {
           loaderVersion = id(entry.getString("version"));
           break;
         }
       }
       if (loaderVersion.isEmpty())
-        throw new IOException("No stable Fabric loader for this version");
+        throw new IOException(pinnedLoader.isEmpty() ? "没有适用的稳定 Fabric 版本。" : "官方源没有整合包指定的 Fabric 加载器版本：" + pinnedLoader);
       byte[] fabric =
           fetch(
               "https://meta.fabricmc.net/v2/versions/loader/"
@@ -319,6 +329,11 @@ public final class LiteVersions {
             .put("loaderVersion", loaderVersion)
             .put("launchVersion", launch)
             .put("status", "installing");
+    String previous = context.getSharedPreferences("lite", 0).getString("selected", "");
+    String previousRuntimeProfile = LauncherPreferences.DEFAULT_PREF.getString(
+        LauncherPreferences.PREF_KEY_CURRENT_PROFILE, null);
+    boolean committed = false;
+    try {
     select(instance);
     CountDownLatch complete = new CountDownLatch(1);
     AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -349,10 +364,11 @@ public final class LiteVersions {
       throw new IOException("Client JAR is missing");
     // Fabric API is a mod, not a Maven loader library. Keep it in this instance's
     // mods directory; any failure must leave the instance uncommitted/unlaunchable.
-    if ("fabric".equals(loader)) {
+    if ("fabric".equals(loader) && content == null) {
       JSONObject api = new LiteMods(context).installFabricApi(instanceId, version);
       instance.put("fabricApi", api);
     }
+    if (content != null) content.prepare(instance(instanceId));
     synchronized (this) {
       JSONArray existing = installed();
       JSONArray updated = new JSONArray();
@@ -362,6 +378,23 @@ public final class LiteVersions {
       updated.put(instance.put("installedAt", System.currentTimeMillis()).put("status", "installed"));
       write(records, updated.toString().getBytes(StandardCharsets.UTF_8));
     }
+    committed = true;
     return instance;
+    } finally {
+      if (!committed) {
+        // Failed pack downloads must not replace the user's working selection.
+        context.getSharedPreferences("lite", 0).edit().putString("selected", previous).apply();
+        if (!previous.isEmpty()) try { select(find(previous)); } catch (Exception ignored) { }
+        LauncherPreferences.DEFAULT_PREF.edit()
+            .putString(LauncherPreferences.PREF_KEY_CURRENT_PROFILE, previousRuntimeProfile).commit();
+        try {
+          String failedProfile = UUID.nameUUIDFromBytes(("lite:" + instanceId).getBytes(StandardCharsets.UTF_8)).toString();
+          if (!failedProfile.equals(previousRuntimeProfile)) {
+            LauncherProfiles.mainProfileJson.profiles.remove(failedProfile);
+            LauncherProfiles.write();
+          }
+        } catch (Exception ignored) { }
+      }
+    }
   }
 }

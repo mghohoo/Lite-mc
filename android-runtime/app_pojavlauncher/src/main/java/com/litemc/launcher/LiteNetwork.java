@@ -17,7 +17,7 @@ import org.json.JSONObject;
 public final class LiteNetwork {
   private static final int CONNECT_TIMEOUT = 15000;
   private static final int READ_TIMEOUT = 45000;
-  private static final int MAX_RESPONSE = 2 * 1024 * 1024;
+  private static final int MAX_RESPONSE = 8 * 1024 * 1024;
 
   private LiteNetwork() {}
 
@@ -67,6 +67,16 @@ public final class LiteNetwork {
   public static byte[] request(
       String method, String target, String[] allowedHosts, Map<String, String> headers, byte[] body)
       throws Exception {
+    return requestBounded(method, target, allowedHosts, headers, body, MAX_RESPONSE);
+  }
+
+  public static byte[] image(String target) throws Exception {
+    return requestBounded("GET", target, new String[]{"cdn.modrinth.com", "media.forgecdn.net", "mediafilez.forgecdn.net"},
+        java.util.Collections.singletonMap("Accept", "image/png,image/jpeg,image/webp"), null, 1048576);
+  }
+
+  private static byte[] requestBounded(String method, String target, String[] allowedHosts,
+      Map<String, String> headers, byte[] body, int maxResponse) throws Exception {
     URL url = checkedUrl(target, allowedHosts);
     for (int redirects = 0; redirects <= 3; redirects++) {
       HttpURLConnection c = (HttpURLConnection) url.openConnection();
@@ -101,15 +111,19 @@ public final class LiteNetwork {
         continue;
       }
       InputStream input = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-      byte[] result = readBounded(input, MAX_RESPONSE);
-      c.disconnect();
+      byte[] result;
+      try { result = readBounded(input, maxResponse); } finally { c.disconnect(); }
       if (code < 200 || code >= 300) {
         String oauthCode = "";
         try {
           oauthCode = new JSONObject(new String(result, "UTF-8")).optString("error", "");
         } catch (Exception ignored) {
         }
-        if (oauthCode.matches("[a-z_]{1,64}")) throw new OAuthException(oauthCode);
+        if ((url.getHost().equals("login.microsoftonline.com") || url.getHost().equals("login.live.com"))
+            && oauthCode.matches("[a-z_]{1,64}")) throw new OAuthException(oauthCode);
+        if (url.getHost().equals("api.curseforge.com") && (code == 401 || code == 403))
+          throw new IOException("CurseForge API key 无效或无权限，请在设置中更新，或切换 Modrinth。");
+        if (code == 429) throw new IOException("官方服务请求过于频繁，请稍后重试。");
         throw new IOException("服务请求失败（HTTP " + code + "）。");
       }
       return result;
@@ -184,7 +198,8 @@ public final class LiteNetwork {
 
   private static URL checkedUrl(String target, String[] allowedHosts) throws Exception {
     URL url = new URL(target);
-    if (!"https".equalsIgnoreCase(url.getProtocol())) throw new IOException("仅允许 HTTPS 地址。");
+    if (!"https".equalsIgnoreCase(url.getProtocol()) || url.getPort() != -1 || url.getUserInfo() != null)
+      throw new IOException("仅允许标准 HTTPS 服务地址。");
     String host = url.getHost().toLowerCase(java.util.Locale.US);
     boolean allowed = false;
     for (String candidate : allowedHosts)

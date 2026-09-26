@@ -42,6 +42,7 @@ public final class LiteActivity extends Activity {
   private volatile boolean ready, destroyed;
   private String pickerRequest;
   private String pickerInstance, pickerKind;
+  private File pickerExport;
   private String loginUri;
   private long lastProgress;
   private final ProgressListener progress =
@@ -113,6 +114,22 @@ public final class LiteActivity extends Activity {
           public WebResourceResponse shouldInterceptRequest(
               WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
+            // Only decoded raster images from resource providers may cross the local UI boundary.
+            if ("https".equals(uri.getScheme()) && uri.getPort() == -1 && uri.getUserInfo() == null
+                && ("cdn.modrinth.com".equals(uri.getHost()) || "media.forgecdn.net".equals(uri.getHost())
+                    || "mediafilez.forgecdn.net".equals(uri.getHost()))
+                && "GET".equals(request.getMethod())) {
+              try {
+                byte[] bytes = LiteNetwork.image(uri.toString());
+                android.graphics.BitmapFactory.Options image = new android.graphics.BitmapFactory.Options();
+                image.inJustDecodeBounds = true;
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, image);
+                if (image.outWidth > 0 && image.outHeight > 0 && image.outWidth <= 4096 && image.outHeight <= 4096
+                    && ("image/png".equals(image.outMimeType) || "image/jpeg".equals(image.outMimeType)
+                        || "image/webp".equals(image.outMimeType)))
+                  return new WebResourceResponse(image.outMimeType, null, new ByteArrayInputStream(bytes));
+              } catch (Exception ignored) { }
+            }
             if ("https".equals(uri.getScheme())
                 && "appassets.androidplatform.net".equals(uri.getHost())
                 && uri.getPort() == -1) {
@@ -226,6 +243,24 @@ public final class LiteActivity extends Activity {
           () -> {
             try {
               JSONObject args = new JSONObject(json);
+              if (action.equals("packs.download")) {
+                if (pickerRequest != null) throw new IllegalStateException("请先完成当前文件选择。");
+                event("progress", object("message", "正在从官方源下载整合包…", "percent", -1));
+                File archive = mods.downloadPack(args);
+                pickerRequest = requestId;
+                pickerExport = archive;
+                runOnUiThread(() -> {
+                  try {
+                    startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                        .addCategory(Intent.CATEGORY_OPENABLE).setType("application/octet-stream")
+                        .putExtra(Intent.EXTRA_TITLE, archive.getName()), 403);
+                  } catch (Exception ex) {
+                    pickerRequest = null; pickerExport = null;
+                    reply(requestId, null, "无法打开保存窗口。下载缓存已保留，可以重试。");
+                  }
+                });
+                return;
+              }
               if (action.equals("files.import")) {
                 if (pickerRequest != null) throw new IllegalStateException("请先完成当前文件选择。");
                 JSONObject entry = versions.find(args.getString("instanceId"));
@@ -355,7 +390,8 @@ public final class LiteActivity extends Activity {
       return result;
     }
     if (action.startsWith("mods.")) {
-      if (!action.equals("mods.config")) {
+      if (action.equals("mods.install") || action.equals("mods.list")
+          || (action.equals("mods.search") && !"modpack".equals(args.optString("kind")))) {
         JSONObject instance = versions.find(args.getString("instanceId"));
         args.put("version", instance.getString("version"))
             .put("loader", instance.getString("loader"));
@@ -405,6 +441,27 @@ public final class LiteActivity extends Activity {
     }
     if (!ready) throw new IllegalStateException("Runtime is still preparing, please wait");
     if (ProgressKeeper.hasOngoingTasks()) throw new IllegalStateException("A game preparation task is still running");
+    if (action.equals("packs.install")) {
+      event("progress", object("message", "正在下载并检查整合包清单…", "percent", -1));
+      LitePacks.Plan plan = LitePacks.inspect(mods.downloadPack(args));
+      if (!"fabric".equals(plan.loader) && !"vanilla".equals(plan.loader))
+        throw new IOException("此整合包需要 " + plan.loader + " " + plan.loaderVersion
+            + "。当前 APK 暂不能自动安装该加载器，请使用“仅下载整合包文件”。");
+      String name = args.optString("name", "").trim();
+      if (name.isEmpty()) {
+        name = plan.name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", " ").trim();
+        if (name.length() > 32) name = name.substring(0, 32);
+      }
+      MinecraftAccount install = new MinecraftAccount(); install.username = "Player";
+      LiteRuntimeAccount.write(this, install);
+      PojavProfile.setCurrentProfile(this, LiteRuntimeAccount.PROFILE);
+      JSONObject installed = versions.install(this, plan.minecraft, plan.loader, name,
+          plan.loaderVersion, directory -> {
+            event("progress", object("message", "正在下载整合包的 Mod 与配置，请保持应用在前台…", "percent", -1));
+            plan.prepare(directory, mods);
+          });
+      return object("instance", installed);
+    }
     if (action.equals("install")) {
       // Validate capability before touching the account/profile used by the runtime.
       LiteVersions.requireAutomaticLoader(args.getString("loader"));
@@ -481,6 +538,28 @@ public final class LiteActivity extends Activity {
   @Override
   protected void onActivityResult(int code, int result, Intent data) {
     super.onActivityResult(code, result, data);
+    if (code == 403 && pickerRequest != null) {
+      final String request = pickerRequest;
+      final File archive = pickerExport;
+      pickerRequest = null; pickerExport = null;
+      submit(() -> {
+        if (result != RESULT_OK || data == null || data.getData() == null) {
+          reply(request, object("cancelled", true), null); return;
+        }
+        Uri uri = data.getData();
+        try {
+          if (archive == null || !"content".equals(uri.getScheme())) throw new IOException("保存位置无效。");
+          try (InputStream in = new FileInputStream(archive);
+              OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+            if (out == null) throw new IOException("无法写入所选位置。");
+            byte[] buffer = new byte[65536];
+            for (int count; (count = in.read(buffer)) != -1;) out.write(buffer, 0, count);
+          }
+          reply(request, object("saved", true, "name", archive.getName()), null);
+        } catch (Exception ex) { reply(request, null, "整合包保存失败，缓存已保留。请检查存储空间后重试。"); }
+      });
+      return;
+    }
     if (code == 402 && pickerRequest != null) {
       final String request = pickerRequest, instanceId = pickerInstance, kind = pickerKind;
       pickerRequest = null; pickerInstance = null; pickerKind = null;

@@ -18,6 +18,11 @@ summary { cursor:pointer; padding:14px 0; color:var(--mint); }
 .mod-detail-head .mod-icon .row-icon { width: 100%; height: 100%; border-radius: 0; }
 .mod-detail-head .mod-icon img { width: 100%; height: 100%; object-fit: cover; }
 .mod-detail-head h2 { margin: 4px 0; }
+.mod-detail-head > div:last-child { min-width:0; overflow-wrap:anywhere; }
+#pack-detail .card { max-width:800px; }
+#pack-detail select { width:100%; min-width:0; text-overflow:ellipsis; }
+#pack-detail label { display:block; margin:18px 0 8px; }
+#pack-status, #mod-feedback { overflow-wrap:anywhere; }
 .mod-detail-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 22px; }
 .mod-detail-actions a { text-decoration: none; }
 @media (max-width: 600px) { .loader-grid { grid-template-columns: 1fr; } .mod-result { align-items: flex-start; flex-wrap: wrap; } .mod-result .details { flex-basis: calc(100% - 46px); } .mod-result .secondary, .mod-result .mod-more { margin-left: 42px; } .mod-detail-head { align-items: flex-start; } }

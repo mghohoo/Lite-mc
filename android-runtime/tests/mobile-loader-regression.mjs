@@ -30,7 +30,7 @@ const sources = {
   'net/kdt/pojavlaunch/JMinecraftVersionList.java': `package net.kdt.pojavlaunch; public class JMinecraftVersionList {public static class Version{}}`,
   'net/kdt/pojavlaunch/prefs/LauncherPreferences.java': `package net.kdt.pojavlaunch.prefs; public class LauncherPreferences {
     public static final String PREF_KEY_CURRENT_PROFILE="profile";public static final Preferences DEFAULT_PREF=new Preferences();
-    public static class Preferences{public Preferences edit(){return this;}public Preferences putString(String n,String v){return this;}public boolean commit(){return true;}public void apply(){}}
+    public static class Preferences{public String getString(String n,String d){return d;}public Preferences edit(){return this;}public Preferences putString(String n,String v){return this;}public boolean commit(){return true;}public void apply(){}}
   }`,
   'net/kdt/pojavlaunch/value/launcherprofiles/MinecraftProfile.java': `package net.kdt.pojavlaunch.value.launcherprofiles; public class MinecraftProfile {public String name,lastVersionId,gameDir,controlFile;}`,
   'net/kdt/pojavlaunch/value/launcherprofiles/LauncherProfiles.java': `package net.kdt.pojavlaunch.value.launcherprofiles; public class LauncherProfiles {public static final Data mainProfileJson=new Data();public static void load(){}public static void write(){}public static class Data{public java.util.Map<String,MinecraftProfile> profiles=new java.util.HashMap<>();}}`,

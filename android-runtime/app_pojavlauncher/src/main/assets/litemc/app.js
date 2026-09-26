@@ -12,7 +12,7 @@ window.LiteEvent = (name, data) => {
   if (name === 'reply') { const item = pending.get(data.id); if (!item) return; pending.delete(data.id); data.error ? item.reject(new Error(data.error)) : item.resolve(data.data); }
   if (name === 'ready') { state.ready = true; refresh().catch(showError); }
   if (name === 'error') toast(data.message);
-  if (name === 'progress' && busy) { $('task-message').textContent = data.message; $('task-progress').value = Math.max(0, Math.min(100, data.percent)); }
+  if (name === 'progress' && busy) { $('task-message').textContent = data.message; if (data.percent < 0) $('task-progress').removeAttribute('value'); else $('task-progress').value = Math.max(0, Math.min(100, data.percent)); }
 };
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 6500); }
 function showError(error) { toast(error.message || String(error)); }
@@ -60,7 +60,7 @@ function translate() {
     const homeEyebrow = document.querySelector('#home .eyebrow');
     if (brandSmall) brandSmall.textContent = '轻量 · 自由 · 中文版';
     if (railNote) railNote.innerHTML = '<i></i> 轻一点，玩自己的';
-    if (modTab) modTab.textContent = '模组';
+    if (modTab) modTab.textContent = '资源';
     if (homeEyebrow) homeEyebrow.textContent = '你的下一场冒险';
     document.querySelectorAll('.eyebrow').forEach(item => {
       if (item.textContent === 'YOUR NEXT ADVENTURE') item.textContent = '你的下一场冒险';
@@ -73,11 +73,12 @@ function translate() {
   }
   window.LiteSkin.motion = $('motion').checked;
   const titles = {home: text('准备好，出发。', 'Ready for your next world.'), versions: text('版本仓库', 'Your collection'), downloads: text('下载新版本', 'Download a version'), mods: text('模组实验室', 'Mod workshop'), 'mod-detail': text('Mod 详情', 'Mod details'), 'local-files': text('本地资源', 'Local resources'), 'global-controls': text('全局按键', 'Global controls'), profile: text('我的角色', 'Your identity'), settings: text('调整到刚刚好', 'Make yourself at home')};
+  titles['pack-detail'] = text('整合包版本', 'Modpack versions');
   $('page-title').textContent = titles[document.querySelector('.page.active').id];
 }
 function page(name) {
   document.querySelectorAll('.page').forEach(item => item.classList.toggle('active', item.id === name));
-  const navPage = {'local-files':'mods', 'global-controls':'settings', 'mod-detail':'mods'}[name] || name;
+  const navPage = {'local-files':'mods', 'global-controls':'settings', 'mod-detail':'mods', 'pack-detail':'mods'}[name] || name;
   document.querySelectorAll('[data-page]').forEach(item => item.classList.toggle('active', item.dataset.page === navPage));
   translate(); window.scrollTo(0, 0);
   if (window.LiteToolsPage) window.LiteToolsPage(name);
@@ -94,6 +95,8 @@ function updateLaunch() {
   $('memory-label').textContent = (state.memory || 2048) + ' MB';
   $('runtime-state').textContent = state.ready ? 'RUNTIME READY' : text('运行组件准备中', 'PREPARING RUNTIME');
   $('mod-target').textContent = item ? text('安装目标：', 'Target: ') + item.version + ' / ' + item.loader.toUpperCase() : text('先在主页选择一个已安装的 Fabric 实例。', 'Select an installed Fabric instance on Home first.');
+  if ($('mod-kind').value === 'modpack') $('mod-target').textContent = text('搜索全部游戏版本，无需先安装游戏。整合包会新建独立实例，不修改当前版本。', 'Browse all game versions. Packs create a new instance; no existing installation is required.');
+  if (window.LitePackControls) window.LitePackControls();
   updateInstallState();
 }
 async function refresh() {
@@ -155,12 +158,23 @@ async function pollLogin() {
 $('poll-login').onclick = () => run($('poll-login'), pollLogin);
 $('open-login').onclick = () => run($('open-login'), () => call('browser.login'));
 $('logout').onclick = () => run($('logout'), async () => { clearTimeout(loginTimer); loginFlow = ''; await call('accounts.logout'); $('login-flow').hidden = true; await refresh(); });
-function modArgs() { const item = selected(); if (!item) throw new Error(text('请先安装并选择一个实例。','Install and select an instance first.')); return {provider:$('mod-provider').value,kind:$('mod-kind') ? $('mod-kind').value : 'mod',version:item.version,loader:item.loader,instanceId:item.id}; }
+function modArgs(forSearch = false) { const kind = $('mod-kind').value; if (forSearch && kind === 'modpack') return {provider:$('mod-provider').value,kind}; const item = selected(); if (!item) throw new Error(text('安装模组或资源包需要先选择一个游戏实例；整合包可以直接搜索。','Select an instance for mods or resource packs. Modpacks can be searched directly.')); return {provider:$('mod-provider').value,kind,version:item.version,loader:item.loader,instanceId:item.id}; }
 function modIcon(item) { const icon = node('div', 'row-icon mod-result-icon', String(item.title || item.id || 'M').trim().slice(0, 1).toUpperCase()); if (item.iconUrl && /^https:\/\//.test(item.iconUrl)) { const image = document.createElement('img'); image.src = item.iconUrl; image.alt = ''; image.addEventListener('error', () => image.remove()); icon.textContent = ''; icon.append(image); } return icon; }
-function installMod(item, args, button) { return run(button, async () => { await call('mods.install',{...args,projectId:item.id}); const kind = args.kind === 'resourcepack' ? text('资源包','resource pack') : args.kind === 'modpack' ? text('整合包','modpack') : text('模组及必需依赖','mod and required dependencies'); toast(text(kind + '已下载到当前实例。', kind + ' downloaded to the current instance.')); },true); }
-function showModDetail(item, args) { $('mod-detail-icon').replaceChildren(modIcon(item)); $('mod-detail-source').textContent = (item.source || args.provider || 'MOD').toUpperCase(); $('mod-detail-title').textContent = item.title || item.id; $('mod-detail-meta').textContent = [item.author, Number(item.downloads || 0).toLocaleString() + ' ' + text('下载', 'downloads')].filter(Boolean).join(' · '); $('mod-detail-description').textContent = item.description || text('该 Mod 未提供项目说明。', 'This mod has no project description.'); const link = $('mod-detail-link'); const validLink = item.pageUrl && /^https:\/\//.test(item.pageUrl); link.hidden = !validLink; if (validLink) link.href = item.pageUrl; $('mod-detail-install').onclick = () => installMod(item, args, $('mod-detail-install')); page('mod-detail'); }
+function installMod(item, args, button) { if (args.kind === 'modpack') return window.LiteOpenPack(item,args,button); return run(button, async () => { await call('mods.install',{...args,projectId:item.id}); const kind = args.kind === 'resourcepack' ? text('资源包','resource pack') : text('模组及必需依赖','mod and required dependencies'); toast(text(kind + '已下载到当前实例。', kind + ' downloaded to the current instance.')); },true); }
+function showModDetail(item, args) { if (args.kind === 'modpack') return window.LiteOpenPack(item,args); $('mod-detail-icon').replaceChildren(modIcon(item)); $('mod-detail-source').textContent = (item.source || args.provider || 'MOD').toUpperCase(); $('mod-detail-title').textContent = item.title || item.id; $('mod-detail-meta').textContent = [item.author, Number(item.downloads || 0).toLocaleString() + ' ' + text('下载', 'downloads')].filter(Boolean).join(' · '); $('mod-detail-description').textContent = item.description || text('该 Mod 未提供项目说明。', 'This mod has no project description.'); const link = $('mod-detail-link'); const validLink = item.pageUrl && /^https:\/\//.test(item.pageUrl); link.hidden = !validLink; if (validLink) link.href = item.pageUrl; $('mod-detail-install').onclick = () => installMod(item, args, $('mod-detail-install')); page('mod-detail'); }
 $('mod-back').onclick = () => page('mods');
-$('mod-search').onclick = () => run($('mod-search'), async () => { const args = {...modArgs(),query:$('mod-query').value.trim()}; const result = await call('mods.search',args); $('mod-results').replaceChildren(); if (!result.items.length) return empty($('mod-results'),text('没有找到兼容的资源。','No compatible resources found.')); result.items.forEach(item => { const row = node('article','list-row mod-result'); const detail = node('div','details'); const count = Number(item.downloads || 0).toLocaleString(); detail.append(node('b','',item.title),node('p','',item.description),node('p','',[(item.author || ''), count + ' ' + text('次下载','downloads')].filter(Boolean).join(' · '))); const install = node('button','secondary',args.kind === 'mod' ? text('安装','Install') : text('下载','Download')); install.onclick = () => installMod(item,args,install); const more = node('button','text-button mod-more',text('详情','Details')); more.onclick = () => showModDetail(item,args); row.append(modIcon(item),detail,install,more); $('mod-results').append(row); }); });
+$('mod-search').onclick = () => run($('mod-search'), async () => {
+  $('mod-results').replaceChildren(); $('mod-feedback').textContent = text('正在搜索官方资源…','Searching official resources…');
+  try {
+    const args = {...modArgs(true),query:$('mod-query').value.trim()};
+    const result = await call('mods.search',args);
+    if (args.kind !== $('mod-kind').value || args.provider !== $('mod-provider').value) return;
+    $('mod-feedback').textContent = result.items.length ? text(`找到 ${result.items.length} 个项目`,`${result.items.length} projects found`) : text('没有找到结果，试试项目英文名或切换来源。','No results. Try the project name or another source.');
+    result.items.forEach(item => { const row = node('article','list-row mod-result'); const detail = node('div','details'); const count = Number(item.downloads || 0).toLocaleString(); detail.append(node('b','',item.title),node('p','',item.description),node('p','',[(item.author || ''), count + ' ' + text('次下载','downloads')].filter(Boolean).join(' · '))); const install = node('button','secondary',args.kind === 'modpack' ? text('选版本','Versions') : text('安装','Install')); install.onclick = () => installMod(item,args,install); const more = node('button','text-button mod-more',text('详情','Details')); more.onclick = () => showModDetail(item,args); row.append(modIcon(item),detail,install,more); $('mod-results').append(row); });
+  } catch (error) { $('mod-feedback').textContent = error.message; throw error; }
+});
+$('mod-kind').onchange = $('mod-provider').onchange = () => { $('mod-results').replaceChildren(); $('mod-feedback').textContent = $('mod-provider').value === 'curseforge' ? text('CurseForge 需要在设置中填写有效 API key；Modrinth 不需要。','CurseForge requires an API key in Settings. Modrinth does not.'):text('留空搜索可查看热门项目。','Search with no text to browse popular projects.'); updateLaunch(); };
+$('mod-query').addEventListener('keydown', event => { if (event.key === 'Enter') $('mod-search').onclick(); });
 $('mod-files').onclick = () => run($('mod-files'), async () => { const result = await call('mods.list',modArgs()); $('mod-file-list').replaceChildren(); if (!result.items.length) return empty($('mod-file-list'),text('文件夹已经就绪，目前没有 Mod。','Folder ready. No mods installed yet.')); result.items.forEach(item => { const row = node('article','list-row'); const detail = node('div','details'); detail.append(node('b','',item.name),node('p','',(item.size/1048576).toFixed(2)+' MB')); row.append(node('span','row-icon','◇'),detail); $('mod-file-list').append(row); }); });
 function setupDownloadPage() {
   const nav = node('button'); nav.dataset.page = 'downloads'; nav.innerHTML = '<span>↓</span><label>下载</label>'; document.querySelector('nav').append(nav); nav.addEventListener('click', () => page('downloads'));
