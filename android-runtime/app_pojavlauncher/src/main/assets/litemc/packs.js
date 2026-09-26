@@ -5,7 +5,7 @@
   function controls() {
     const entry = current();
     const loaders = entry ? entry.loaders || [] : [];
-    const supported = entry && (loaders.length === 0 || loaders.some(item => ['fabric','vanilla','minecraft'].includes(item)));
+    const supported = entry && (loaders.length === 0 || loaders.some(item => ['fabric','vanilla','minecraft','forge'].includes(item)));
     $('pack-install').disabled = busy || !supported;
     $('pack-download').disabled = busy || !entry;
     $('pack-retry').disabled = busy || !project;

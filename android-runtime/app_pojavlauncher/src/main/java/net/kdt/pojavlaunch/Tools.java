@@ -649,13 +649,14 @@ public final class Tools {
     }
 
     public static File getGameDirPath(@NonNull MinecraftProfile minecraftProfile){
-        if(minecraftProfile.gameDir != null){
-            if(minecraftProfile.gameDir.startsWith(Tools.LAUNCHERPROFILES_RTPREFIX))
-                return new File(minecraftProfile.gameDir.replace(Tools.LAUNCHERPROFILES_RTPREFIX,Tools.DIR_GAME_HOME+"/"));
-            else
-                return new File(Tools.DIR_GAME_HOME,minecraftProfile.gameDir);
-        }
-        return new File(Tools.DIR_GAME_NEW);
+        String configured = minecraftProfile.gameDir;
+        if (configured == null || configured.isEmpty()) return new File(Tools.DIR_GAME_NEW);
+        if (configured.startsWith(Tools.LAUNCHERPROFILES_RTPREFIX))
+            return new File(Tools.DIR_GAME_HOME, configured.substring(Tools.LAUNCHERPROFILES_RTPREFIX.length()));
+        // Lite instances store absolute paths. File(parent, child) concatenates even
+        // an absolute child on Android, silently starting an empty duplicate folder.
+        File directory = new File(configured);
+        return directory.isAbsolute() ? directory : new File(Tools.DIR_GAME_HOME, configured);
     }
 
     public static void buildNotificationChannel(Context context){

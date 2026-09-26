@@ -69,8 +69,6 @@ public final class LiteVersions {
 
   private static String unsupportedLoaderReason(String loader) {
     loaderName(loader);
-    if ("forge".equals(loader))
-      return "Android 版 Forge 自动安装暂未适配：还需要独立 JVM 执行官方安装器的补丁处理。仅下载 JAR 不代表安装完成，请先使用 Fabric 或原版。";
     if ("liteloader".equals(loader))
       return "LiteLoader 自动安装暂不可用：尚未取得可验证的官方版本元数据，不会改装成原版。";
     if ("optifine".equals(loader))
@@ -217,6 +215,9 @@ public final class LiteVersions {
     for (int i = 0; i < all.length(); i++) {
       JSONObject item = all.getJSONObject(i);
       withCompatibility(item, item.getString("version"));
+      File mods = new File(new File(new File(Tools.DIR_GAME_NEW, "lite-instances"), id(item.getString("id"))), "mods");
+      File[] files = mods.listFiles(file -> file.isFile() && file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar"));
+      item.put("modCount", files == null ? 0 : files.length);
     }
     return all;
   }
@@ -269,6 +270,7 @@ public final class LiteVersions {
     String reason = compatibilityReasonForDevice(version);
     if (!reason.isEmpty()) throw new IllegalArgumentException(reason);
     requireAutomaticLoader(loader);
+    if ("forge".equals(loader)) LiteForge.requireSupportedVersion(version);
     catalog(false);
     JSONObject metadata = null;
     JSONArray all = manifest.getJSONArray("versions");
@@ -335,33 +337,16 @@ public final class LiteVersions {
     boolean committed = false;
     try {
     select(instance);
-    CountDownLatch complete = new CountDownLatch(1);
-    AtomicReference<Throwable> failure = new AtomicReference<>();
-    JMinecraftVersionList.Version listed =
-        loader.equals("vanilla")
-            ? Tools.GLOBAL_GSON.fromJson(metadata.toString(), JMinecraftVersionList.Version.class)
-            : null;
-    new MinecraftDownloader()
-        .start(
-            activity,
-            listed,
-            launch,
-            new AsyncMinecraftDownloader.DoneListener() {
-              public void onDownloadDone() {
-                complete.countDown();
-              }
-
-              public void onDownloadFailed(Throwable error) {
-                failure.set(error);
-                complete.countDown();
-              }
-            });
-    if (!complete.await(45, TimeUnit.MINUTES))
-      throw new IOException("Installation timed out; retry to reuse downloaded files");
-    if (failure.get() != null)
-      throw new IOException("Game preparation failed: " + failure.get().getClass().getSimpleName());
-    if (!new File(Tools.DIR_HOME_VERSION, launch + "/" + launch + ".jar").isFile())
-      throw new IOException("Client JAR is missing");
+    prepareGame(activity, launch.equals(version) ? metadata : null, launch);
+    if ("forge".equals(loader)) {
+      // The official installer needs the vanilla client and its Java runtime first.
+      JSONObject forge = LiteForge.install(activity, version, pinnedLoader);
+      launch = id(forge.getString("launchVersion"));
+      loaderVersion = forge.getString("loaderVersion");
+      instance.put("launchVersion", launch).put("loaderVersion", loaderVersion);
+      select(instance);
+      prepareGame(activity, null, launch);
+    }
     // Fabric API is a mod, not a Maven loader library. Keep it in this instance's
     // mods directory; any failure must leave the instance uncommitted/unlaunchable.
     if ("fabric".equals(loader) && content == null) {
@@ -396,5 +381,20 @@ public final class LiteVersions {
         } catch (Exception ignored) { }
       }
     }
+  }
+
+  private void prepareGame(Activity activity, JSONObject metadata, String launch) throws Exception {
+    CountDownLatch complete = new CountDownLatch(1);
+    AtomicReference<Throwable> failure = new AtomicReference<>();
+    JMinecraftVersionList.Version listed = metadata == null ? null
+        : Tools.GLOBAL_GSON.fromJson(metadata.toString(), JMinecraftVersionList.Version.class);
+    new MinecraftDownloader().start(activity, listed, launch, new AsyncMinecraftDownloader.DoneListener() {
+      public void onDownloadDone() { complete.countDown(); }
+      public void onDownloadFailed(Throwable error) { failure.set(error); complete.countDown(); }
+    });
+    if (!complete.await(45, TimeUnit.MINUTES)) throw new IOException("游戏文件准备超时，重试可复用已下载文件。");
+    if (failure.get() != null) throw new IOException("游戏准备失败：" + failure.get().getClass().getSimpleName());
+    if (!new File(Tools.DIR_HOME_VERSION, launch + "/" + launch + ".jar").isFile())
+      throw new IOException("游戏客户端文件缺失。");
   }
 }

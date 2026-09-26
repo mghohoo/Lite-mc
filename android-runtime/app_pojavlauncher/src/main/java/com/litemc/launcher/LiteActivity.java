@@ -399,6 +399,7 @@ public final class LiteActivity extends Activity {
       return mods.handle(action, args);
     }
     if (action.equals("catalog")) return versions.catalog(args.optBoolean("refresh"));
+    if (action.equals("forge.versions")) return object("items", LiteForge.versions(args.getString("version")));
     if (action.equals("loaders")) return object("items", LiteVersions.loaders());
     if (action.equals("settings")) {
       String language = args.optString("language", "zh");
@@ -444,7 +445,7 @@ public final class LiteActivity extends Activity {
     if (action.equals("packs.install")) {
       event("progress", object("message", "正在下载并检查整合包清单…", "percent", -1));
       LitePacks.Plan plan = LitePacks.inspect(mods.downloadPack(args));
-      if (!"fabric".equals(plan.loader) && !"vanilla".equals(plan.loader))
+      if (!"fabric".equals(plan.loader) && !"vanilla".equals(plan.loader) && !"forge".equals(plan.loader))
         throw new IOException("此整合包需要 " + plan.loader + " " + plan.loaderVersion
             + "。当前 APK 暂不能自动安装该加载器，请使用“仅下载整合包文件”。");
       String name = args.optString("name", "").trim();
@@ -470,7 +471,8 @@ public final class LiteActivity extends Activity {
       install.username = "Player";
       LiteRuntimeAccount.write(this, install);
       PojavProfile.setCurrentProfile(this, LiteRuntimeAccount.PROFILE);
-      return versions.install(this, args.getString("version"), args.getString("loader"), args.optString("name", ""));
+      return versions.install(this, args.getString("version"), args.getString("loader"), args.optString("name", ""),
+          args.optString("loaderVersion", ""), null);
     }
     if (action.equals("select")) {
       JSONObject entry = versions.find(args.getString("instanceId"));
@@ -482,6 +484,11 @@ public final class LiteActivity extends Activity {
       JSONObject entry = versions.find(args.getString("instanceId"));
       versions.select(entry);
       prepareControls(entry);
+      File expectedDirectory = LiteVersions.instance(entry.getString("id"));
+      File actualDirectory = Tools.getGameDirPath(
+          net.kdt.pojavlaunch.value.launcherprofiles.LauncherProfiles.getCurrentProfile()).getCanonicalFile();
+      if (!expectedDirectory.equals(actualDirectory))
+        throw new IOException("游戏目录与整合包目录不一致，已阻止启动空实例。请重新选择版本。");
       String version = LiteVersions.id(entry.getString("launchVersion"));
       File client = new File(Tools.DIR_HOME_VERSION, version + "/" + version + ".jar");
       if (client.length() == 0)

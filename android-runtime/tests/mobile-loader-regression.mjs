@@ -26,6 +26,14 @@ const sources = {
     public net.kdt.pojavlaunch.prefs.LauncherPreferences.Preferences getSharedPreferences(String n,int m){return new net.kdt.pojavlaunch.prefs.LauncherPreferences.Preferences();}
   }`,
   'android/app/Activity.java': `package android.app; public class Activity extends android.content.Context {public Activity(java.io.File f){super(f);}}`,
+  // Plain filesystem stand-in: tests compatibility annotations, not AtomicFile durability.
+  'android/util/AtomicFile.java': `package android.util; public class AtomicFile {
+    private final java.io.File file; public AtomicFile(java.io.File f){file=f;}
+    public byte[] readFully()throws java.io.IOException{return java.nio.file.Files.readAllBytes(file.toPath());}
+    public java.io.FileOutputStream startWrite()throws java.io.IOException{return new java.io.FileOutputStream(file);}
+    public void finishWrite(java.io.FileOutputStream out)throws java.io.IOException{out.close();}
+    public void failWrite(java.io.FileOutputStream out)throws java.io.IOException{out.close();}
+  }`,
   'net/kdt/pojavlaunch/Tools.java': `package net.kdt.pojavlaunch; public class Tools {public static String DIR_GAME_NEW,DIR_HOME_VERSION,CTRLMAP_PATH;public static final com.google.gson.Gson GLOBAL_GSON=new com.google.gson.Gson();}`,
   'net/kdt/pojavlaunch/JMinecraftVersionList.java': `package net.kdt.pojavlaunch; public class JMinecraftVersionList {public static class Version{}}`,
   'net/kdt/pojavlaunch/prefs/LauncherPreferences.java': `package net.kdt.pojavlaunch.prefs; public class LauncherPreferences {
@@ -36,6 +44,12 @@ const sources = {
   'net/kdt/pojavlaunch/value/launcherprofiles/LauncherProfiles.java': `package net.kdt.pojavlaunch.value.launcherprofiles; public class LauncherProfiles {public static final Data mainProfileJson=new Data();public static void load(){}public static void write(){}public static class Data{public java.util.Map<String,MinecraftProfile> profiles=new java.util.HashMap<>();}}`,
   'net/kdt/pojavlaunch/tasks/AsyncMinecraftDownloader.java': `package net.kdt.pojavlaunch.tasks;public class AsyncMinecraftDownloader {public interface DoneListener{void onDownloadDone();void onDownloadFailed(Throwable t);}}`,
   'net/kdt/pojavlaunch/tasks/MinecraftDownloader.java': `package net.kdt.pojavlaunch.tasks;public class MinecraftDownloader {public void start(android.app.Activity a,net.kdt.pojavlaunch.JMinecraftVersionList.Version v,String id,AsyncMinecraftDownloader.DoneListener l){throw new AssertionError("Runtime downloading is outside this test");}}`,
+  // Capability/routing only. The real installer is intentionally not run here.
+  'com/litemc/launcher/LiteForge.java': `package com.litemc.launcher;public class LiteForge {
+    public static int checks,installs;
+    public static void requireSupportedVersion(String version){checks++;if(version.matches("1\\\\.(?:[0-9]|1[0-2])(?:\\\\..*)?"))throw new IllegalArgumentException("Forge requires Minecraft 1.13+");}
+    public static org.json.JSONObject install(android.app.Activity activity,String version,String loaderVersion){installs++;throw new AssertionError("Real Forge installation is outside this capability regression");}
+  }`,
   'com/litemc/launcher/LiteNetwork.java': `package com.litemc.launcher;import java.io.*;import java.nio.file.*;import java.util.*;import org.json.*;
     public class LiteNetwork {
       public static int requests,downloads;public static String lastUrl;public static final Map<String,String> versions=new HashMap<>();
@@ -71,12 +85,17 @@ public class MobileLoaderRegression {
     File base=new File(args[0]);base.mkdirs();Tools.DIR_GAME_NEW=new File(base,"game").getPath();Tools.DIR_HOME_VERSION=new File(base,"versions").getPath();Tools.CTRLMAP_PATH=new File(base,"controls").getPath();
     android.content.Context context=new android.content.Context(base);LiteMods mods=new LiteMods(context);
     JSONArray capabilities=LiteVersions.loaders();check(capabilities.length()==5,"capability count");
-    for(int i=0;i<capabilities.length();i++){JSONObject l=capabilities.getJSONObject(i);boolean enabled=i<2;check(l.getBoolean("automaticInstall")==enabled,"capability state");check(enabled||!l.getString("reason").isEmpty(),"unsupported loader reason");}
+    for(int i=0;i<capabilities.length();i++){JSONObject l=capabilities.getJSONObject(i);String loader=l.getString("id");boolean enabled=loader.equals("vanilla")||loader.equals("fabric")||loader.equals("forge");check(l.getBoolean("automaticInstall")==enabled,"capability state: "+loader);check(enabled||!l.getString("reason").isEmpty(),"unsupported loader reason");}
     pass("five loaders report honest automatic-install capabilities");
-    for(String loader:new String[]{"forge","liteloader","optifine"}){
+    for(String loader:new String[]{"liteloader","optifine"}){
       rejects(()->new LiteVersions(context).install(null,"1.20.1",loader,"test"),LiteVersions.loaderName(loader));
     }
     check(LiteNetwork.requests==0,"unsupported loader performed network");check(!new File(base,"lite-instances.json").exists(),"unsupported loader committed record");pass("unsupported installers reject before network or installed record");
+    LiteVersions versions=new LiteVersions(context);
+    for(String legacy:new String[]{"1.7.10","1.12.2"})rejects(()->versions.install(null,legacy,"forge","test"),"1.13+");
+    check(LiteForge.checks==2&&LiteForge.installs==0,"Forge legacy guard did not precede installer");
+    check(LiteNetwork.requests==0,"legacy Forge performed network");check(!new File(base,"lite-instances.json").exists(),"legacy Forge committed record");
+    pass("Forge legacy requests route through version guard before network or runtime installation (stub guard)");
     api(version("fabric-api","api-v1","fabric"));
     JSONObject result=mods.installFabricApi("fabric-1.20.1-test","1.20.1");
     File jar=new File(Tools.DIR_GAME_NEW,"lite-instances/fabric-1.20.1-test/mods/fabric-api.jar");

@@ -13,6 +13,7 @@ const java = 'app_pojavlauncher/src/main/java/com/litemc/launcher/';
 const read = relative => readFileSync(path.join(root, relative), 'utf8');
 const html = read(asset + 'index.html');
 const app = read(asset + 'app.js');
+const forge = read(asset + 'forge.js');
 const skin = read(asset + 'skin.js');
 const activity = read(java + 'LiteActivity.java');
 const serviceSource = ['LiteActivity.java', 'LiteAccounts.java', 'LiteMods.java'].map(file => read(java + file)).join('\n');
@@ -146,7 +147,7 @@ await test('translation targets do not contain interactive descendants', () => {
   }
 });
 await test('every UI native action has an explicit native handler', () => {
-  const actions = [...app.matchAll(/call\('([^']+)'/g)].map(match=>match[1]);
+  const actions = [...(app+'\n'+forge).matchAll(/call\('([^']+)'/g)].map(match=>match[1]);
   const handled = new Set([...serviceSource.matchAll(/(?:action\.equals\("([^"]+)"\)|"([^"]+)"\.equals\(action\))/g)].map(match=>match[1]||match[2]));
   assert.deepEqual([...new Set(actions)].filter(action=>!handled.has(action)),[], 'UI calls unsupported native actions');
 });
@@ -171,6 +172,16 @@ await test('unavailable loader displays native capability reason without changin
   assert.equal(h.run('loader'),'vanilla');
   assert.equal(h.document.querySelector('[data-loader="forge"]').querySelector('small').textContent,'安卓暂不可自动安装');
   assert.ok(!h.requests.some(request=>request.action==='install'));
+});
+await test('Forge fallback is selectable and passes the explicitly chosen loader version', async () => {
+  const h=await harness(); const shown=[];
+  h.context.LiteForgeShow=(scope,loader)=>shown.push({scope,loader});
+  h.context.LiteForgeVersion=scope=>{assert.equal(scope,'version');return '47.3.22';};
+  await h.run('catalog(false)');
+  await h.document.querySelector('[data-loader="forge"]').dispatch('click');
+  assert.equal(h.run('loader'),'forge');assert.deepEqual(shown,[{scope:'version',loader:'forge'}]);
+  await h.get('install').dispatch('click');await settle();
+  assert.deepEqual(h.requests.find(request=>request.action==='install').args,{version:'1.20.1',loader:'forge',loaderVersion:'47.3.22'});
 });
 await test('loader labels include Fabric API and do not promise unsupported integrations', async () => {
   const h=await harness();

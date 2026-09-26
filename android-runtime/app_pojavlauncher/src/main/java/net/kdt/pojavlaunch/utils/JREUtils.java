@@ -37,6 +37,15 @@ import net.kdt.pojavlaunch.value.launcherprofiles.LauncherProfiles;
 import org.lwjgl.glfw.*;
 
 public class JREUtils {
+    private static final ThreadLocal<Boolean> INSTALLER_VM = new ThreadLocal<>();
+
+    /** Runs a short-lived installer JVM without game rendering or game javaagents. */
+    public static void launchInstallerJavaVM(final AppCompatActivity activity, final Runtime runtime,
+            final List<String> args) throws Throwable {
+        INSTALLER_VM.set(Boolean.TRUE);
+        try { launchJavaVM(activity, runtime, null, args, ""); }
+        finally { INSTALLER_VM.remove(); }
+    }
     private JREUtils() {}
 
     public static String LD_LIBRARY_PATH;
@@ -338,7 +347,8 @@ public class JREUtils {
         JREUtils.relocateLibPath(runtime, runtimeHome);
 
         setJavaEnvironment(activity, runtimeHome);
-        final String graphicsLib = loadGraphicsLibrary();
+        final boolean installerVm = Boolean.TRUE.equals(INSTALLER_VM.get());
+        final String graphicsLib = installerVm ? null : loadGraphicsLibrary();
 
         // Has to run after SDL env vars are set
         try {
@@ -347,7 +357,7 @@ public class JREUtils {
             // This only matters for Angelica because Mojunk is never using SDL on non-Core
             if (graphicsLib != null && !LOCAL_RENDERER.equals("opengles_system_gles"))
                 Os.setenv("SDL_OPENGL_LIBRARY", graphicsLib, true);
-            if (Os.getenv("POJAVEXEC_EGL") != null && !LOCAL_RENDERER.equals("opengles_system_gles"))
+            if (!installerVm && LOCAL_RENDERER != null && Os.getenv("POJAVEXEC_EGL") != null && !LOCAL_RENDERER.equals("opengles_system_gles"))
                 Os.setenv("SDL_EGL_LIBRARY", NATIVE_LIB_DIR+"/"+Os.getenv("POJAVEXEC_EGL"), true);
         } catch (ErrnoException e) {
             Log.wtf("RENDER_LIBRARY", "Failed to load set SDL env vars");
@@ -371,27 +381,30 @@ public class JREUtils {
         purgeArg(userArgs, "-XX:ActiveProcessorCount");
 
         //Add automatically generated args
-        userArgs.add("-Xms" + LauncherPreferences.PREF_RAM_ALLOCATION + "M");
-        userArgs.add("-Xmx" + LauncherPreferences.PREF_RAM_ALLOCATION + "M");
-        if(LOCAL_RENDERER != null) userArgs.add("-Dorg.lwjgl.opengl.libname=" + graphicsLib);
+        int installerRam = Math.min(1024, Math.max(128, LauncherPreferences.PREF_RAM_ALLOCATION));
+        userArgs.add("-Xms" + (installerVm ? 128 : LauncherPreferences.PREF_RAM_ALLOCATION) + "M");
+        userArgs.add("-Xmx" + (installerVm ? installerRam : LauncherPreferences.PREF_RAM_ALLOCATION) + "M");
+        if(!installerVm && LOCAL_RENDERER != null) userArgs.add("-Dorg.lwjgl.opengl.libname=" + graphicsLib);
 
         // Force LWJGL to use the Freetype library intended for it, instead of using the one
         // that we ship with Java (since it may be older than what's needed)
-        userArgs.add("-Dorg.lwjgl.freetype.libname="+ Tools.lwjglNativesDir +"/libfreetype.so");
+        if (!installerVm) userArgs.add("-Dorg.lwjgl.freetype.libname="+ Tools.lwjglNativesDir +"/libfreetype.so");
         // Our spirv-cross is compiled shared, so it gets named shared.
-        userArgs.add("-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared");
+        if (!installerVm) userArgs.add("-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared");
 
         // We don't have jemalloc for our LWJGL so set the allocator to system to avoid error logs
-        userArgs.add("-Dorg.lwjgl.system.allocator=system");
+        if (!installerVm) userArgs.add("-Dorg.lwjgl.system.allocator=system");
 
         // Some phones are not using the right number of cores, fix that
         userArgs.add("-XX:ActiveProcessorCount=" + java.lang.Runtime.getRuntime().availableProcessors());
         // Adds/changes methods for compatibility
-        userArgs.add("-javaagent:"+new File(Tools.DIR_DATA,"MioLibPatcher/MioLibPatcher.jar").getAbsolutePath());
-        userArgs.add("-Dmiolibpatcher.alc10=true");
+        if (!installerVm) {
+            userArgs.add("-javaagent:"+new File(Tools.DIR_DATA,"MioLibPatcher/MioLibPatcher.jar").getAbsolutePath());
+            userArgs.add("-Dmiolibpatcher.alc10=true");
+        }
 
         userArgs.addAll(JVMArgs);
-        activity.runOnUiThread(() -> Toast.makeText(activity, activity.getString(R.string.autoram_info_msg,LauncherPreferences.PREF_RAM_ALLOCATION), Toast.LENGTH_SHORT).show());
+        if (!installerVm) activity.runOnUiThread(() -> Toast.makeText(activity, activity.getString(R.string.autoram_info_msg,LauncherPreferences.PREF_RAM_ALLOCATION), Toast.LENGTH_SHORT).show());
         System.out.println(JVMArgs);
 
         initJavaRuntime(runtimeHome);
@@ -402,7 +415,7 @@ public class JREUtils {
 
         final int exitCode = VMLauncher.launchJVM(userArgs.toArray(new String[0]));
         Logger.appendToLog("Java Exit code: " + exitCode);
-        if (exitCode != 0) {
+        if (exitCode != 0 && !installerVm) {
             LifecycleAwareAlertDialog.DialogCreator dialogCreator = (dialog, builder)->
                     builder.setMessage(activity.getString(R.string.mcn_exit_title, exitCode))
                     .setPositiveButton(R.string.main_share_logs, (dialogInterface, which)-> shareLog(activity));
