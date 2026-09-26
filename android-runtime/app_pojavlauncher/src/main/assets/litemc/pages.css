@@ -1,4 +1,12 @@
 .loader-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.resource-links { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 20px; }
+.control-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.control-options output { color:var(--mint); float:right; }
+#local-files .list { margin-top:16px; max-height:360px; overflow:auto; }
+.projection-card { margin-top:18px; }
+summary { cursor:pointer; padding:14px 0; color:var(--mint); }
+#import-result { margin-top:18px; }
+@media(max-width:600px) { .control-options { grid-template-columns:1fr; } }
 .loader-grid button[data-unavailable="true"] { opacity: .66; border-style: dashed; }
 .mod-result { align-items: center; }
 .mod-result-icon { overflow: hidden; }

@@ -28,6 +28,7 @@ import net.kdt.pojavlaunch.progresskeeper.ProgressListener;
 import net.kdt.pojavlaunch.tasks.AsyncAssetManager;
 import net.kdt.pojavlaunch.value.MinecraftAccount;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 /** Independent Lite-MC product UI. Untrusted pages never receive the native bridge. */
 public final class LiteActivity extends Activity {
@@ -40,6 +41,7 @@ public final class LiteActivity extends Activity {
   private SharedPreferences preferences;
   private volatile boolean ready, destroyed;
   private String pickerRequest;
+  private String pickerInstance, pickerKind;
   private String loginUri;
   private long lastProgress;
   private final ProgressListener progress =
@@ -154,9 +156,8 @@ public final class LiteActivity extends Activity {
                     AsyncAssetManager.assertReady();
                     try (InputStream input = getAssets().open("litemc/controls.json")) {
                       // MainActivity resolves profile.controlFile relative to .minecraft/controlmap.
-                      LiteVersions.write(
-                          new File(Tools.CTRLMAP_PATH, "lite-mc-mobile.json"),
-                          readBounded(input, 256000));
+                      File template = new File(Tools.CTRLMAP_PATH, "lite-mc-mobile.json");
+                      if (!template.isFile()) LiteVersions.write(template, readBounded(input, 256000));
                     }
                     MinecraftAccount local = new MinecraftAccount();
                     local.username = "Player";
@@ -225,6 +226,24 @@ public final class LiteActivity extends Activity {
           () -> {
             try {
               JSONObject args = new JSONObject(json);
+              if (action.equals("files.import")) {
+                if (pickerRequest != null) throw new IllegalStateException("请先完成当前文件选择。");
+                JSONObject entry = versions.find(args.getString("instanceId"));
+                String kind = args.getString("kind");
+                if (!kind.equals("mod") && !kind.equals("schematic")) throw new IOException("文件类型无效。");
+                if (kind.equals("mod") && "vanilla".equals(entry.getString("loader")))
+                  throw new IOException("当前实例是原版，请先选择安装了加载器的实例。");
+                pickerRequest = requestId;
+                pickerInstance = entry.getString("id");
+                pickerKind = kind;
+                runOnUiThread(() -> {
+                  try {
+                    startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+                        .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true).addCategory(Intent.CATEGORY_OPENABLE), 402);
+                  } catch (Exception ex) { pickerRequest = null; reply(requestId, null, "无法打开系统文件选择器。"); }
+                });
+                return;
+              }
               if (action.equals("skin.pick")) {
                 if (pickerRequest != null)
                   throw new IllegalStateException("A file picker is already open");
@@ -281,6 +300,19 @@ public final class LiteActivity extends Activity {
           isTabletRuntime(),
           "controlScale",
           LauncherPreferences.DEFAULT_PREF.getInt("buttonscale", 100));
+    if (action.equals("controls.read")) return readControls();
+    if (action.equals("controls.save")) {
+      JSONObject controls = LiteControls.validate(args);
+      LiteVersions.write(new File(getFilesDir(), "lite-global-controls.json"), controls.toString().getBytes("UTF-8"));
+      LauncherPreferences.DEFAULT_PREF.edit().putInt("buttonscale", controls.getInt("scale")).apply();
+      LauncherPreferences.loadPreferences(this);
+      return controls;
+    }
+    if (action.equals("projection.status")) {
+      JSONObject entry = versions.find(args.getString("instanceId"));
+      File instance = LiteVersions.instance(entry.getString("id"));
+      return LiteLocalFiles.projection(instance).put("shortcut", LiteControls.projectionHotkey(instance).getString("label"));
+    }
     if (action.equals("skin.read")) {
       JSONObject account = accounts.snapshot();
       File local = new File(getFilesDir(), "lite-skin.png");
@@ -392,6 +424,7 @@ public final class LiteActivity extends Activity {
       AsyncAssetManager.assertReady();
       JSONObject entry = versions.find(args.getString("instanceId"));
       versions.select(entry);
+      prepareControls(entry);
       String version = LiteVersions.id(entry.getString("launchVersion"));
       File client = new File(Tools.DIR_HOME_VERSION, version + "/" + version + ".jar");
       if (client.length() == 0)
@@ -418,6 +451,29 @@ public final class LiteActivity extends Activity {
     return "balanced";
   }
 
+  private JSONObject readControls() throws Exception {
+    File saved = new File(getFilesDir(), "lite-global-controls.json");
+    JSONObject result = new JSONObject();
+    if (saved.isFile()) try (InputStream in = new FileInputStream(saved)) {
+      result = new JSONObject(LiteLocalFiles.read(in, 65536));
+    }
+    result.put("scale", LauncherPreferences.DEFAULT_PREF.getInt("buttonscale", 100));
+    return LiteControls.validate(result);
+  }
+
+  private void prepareControls(JSONObject entry) throws Exception {
+    JSONObject template;
+    try (InputStream in = new FileInputStream(new File(Tools.CTRLMAP_PATH, "lite-mc-mobile.json"))) {
+      template = new JSONObject(LiteLocalFiles.read(in, 256000));
+    }
+    String id = LiteVersions.id(entry.getString("id"));
+    JSONObject layout = LiteControls.layout(template, readControls(), LiteVersions.instance(id));
+    String name = "lite-generated-" + id + ".json";
+    LiteVersions.write(new File(Tools.CTRLMAP_PATH, name), layout.toString().getBytes("UTF-8"));
+    net.kdt.pojavlaunch.value.launcherprofiles.LauncherProfiles.getCurrentProfile().controlFile = name;
+    net.kdt.pojavlaunch.value.launcherprofiles.LauncherProfiles.write();
+  }
+
   private boolean isTabletRuntime() {
     return getResources().getConfiguration().smallestScreenWidthDp >= 600;
   }
@@ -425,6 +481,38 @@ public final class LiteActivity extends Activity {
   @Override
   protected void onActivityResult(int code, int result, Intent data) {
     super.onActivityResult(code, result, data);
+    if (code == 402 && pickerRequest != null) {
+      final String request = pickerRequest, instanceId = pickerInstance, kind = pickerKind;
+      pickerRequest = null; pickerInstance = null; pickerKind = null;
+      submit(() -> {
+        JSONArray installed = new JSONArray(), failed = new JSONArray();
+        try {
+          if (result != RESULT_OK || data == null) { reply(request, object("cancelled", true), null); return; }
+          java.util.LinkedHashSet<Uri> uris = new java.util.LinkedHashSet<>();
+          if (data.getClipData() != null) for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
+          else if (data.getData() != null) uris.add(data.getData());
+          if (uris.isEmpty() || uris.size() > 20) throw new IOException("每次请选择 1–20 个文件。");
+          File instance = LiteVersions.instance(versions.find(instanceId).getString("id"));
+          for (Uri uri : uris) {
+            String name = "所选文件";
+            try {
+              if (!"content".equals(uri.getScheme())) throw new IOException("请选择系统文档中的文件。");
+              try (android.database.Cursor cursor = getContentResolver().query(uri,
+                  new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+                if (cursor == null || !cursor.moveToFirst()) throw new IOException("无法读取文件名。");
+                name = cursor.getString(0);
+              }
+              try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IOException("无法读取文件。");
+                installed.put(LiteLocalFiles.importFile(instance, in, name, kind).getName());
+              }
+            } catch (Exception ex) { failed.put(object("name", name, "error", ex.getMessage() == null ? "导入失败" : ex.getMessage())); }
+          }
+          reply(request, object("installed", installed, "failed", failed), null);
+        } catch (Exception ex) { reply(request, null, ex.getMessage()); }
+      });
+      return;
+    }
     if (code != 401 || pickerRequest == null) return;
     String request = pickerRequest;
     pickerRequest = null;
